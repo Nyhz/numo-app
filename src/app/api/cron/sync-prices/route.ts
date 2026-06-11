@@ -1,5 +1,7 @@
 import { db } from "../../../../db/client";
-import { yahooProvider, coingeckoProvider } from "../../../../lib/pricing";
+import { BENCHMARK_KEYS } from "../../../../lib/benchmarks";
+import { refreshActiveBenchmarks } from "../../../../lib/benchmark-sync";
+import { fetchHistory, yahooProvider, coingeckoProvider } from "../../../../lib/pricing";
 import { withRetry } from "../../../../lib/pricing/_net";
 import { syncPrices } from "../../../../lib/price-sync";
 
@@ -27,7 +29,12 @@ async function handle(req: Request): Promise<Response> {
       yahoo: { fetchQuote: (s) => withRetry(() => yahooProvider.fetchQuote(s)) },
       coingecko: { fetchQuote: (s) => withRetry(() => coingeckoProvider.fetchQuote(s)) },
     });
-    return Response.json({ ok: true, summary });
+    // Benchmarks the Commander has activated at least once keep their price
+    // history fresh alongside the asset sync; never-activated ones are free.
+    const benchmarks = await refreshActiveBenchmarks(db, BENCHMARK_KEYS, {
+      fetchHistory: (s, from, to) => withRetry(() => fetchHistory(s, from, to)),
+    });
+    return Response.json({ ok: true, summary, benchmarks });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return Response.json({ ok: false, error: message }, { status: 500 });

@@ -3,8 +3,9 @@
 import { useMemo } from "react";
 import {
   Area,
-  AreaChart,
   CartesianGrid,
+  ComposedChart,
+  Line,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -14,6 +15,7 @@ import {
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur, formatPercent } from "@/src/lib/format";
 import type { NetWorthPoint } from "@/src/server/overview";
+import type { BenchmarkSeries } from "@/src/server/benchmarks";
 
 type TooltipEntry = { value?: number | string; payload?: Point };
 type ChartTooltipProps = {
@@ -26,7 +28,7 @@ type Point = {
   marketIndex: number;
   totalValue: number;
   dateIso: string;
-};
+} & Record<`bench_${string}`, number | undefined>;
 
 const BASELINE = 100;
 const CHART_EDGE_PADDING_RATIO = 0.02;
@@ -58,24 +60,44 @@ function formatTooltipDate(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
-export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
+function formatIndexPercent(index: number): string {
+  const pct = index - BASELINE;
+  return `${pct >= 0 ? "+" : ""}${formatPercent(pct / 100)}`;
+}
+
+export function NetWorthChart({
+  data,
+  benchmarks = [],
+}: {
+  data: NetWorthPoint[];
+  benchmarks?: BenchmarkSeries[];
+}) {
   const points: Point[] = useMemo(
     () =>
-      data.map((p) => ({
-        label: formatLabel(p.date),
-        dateIso: p.date,
-        totalValue: p.valueEur,
-        // Time-weighted return index from the server: 100 = flat, deposits
-        // and withdrawals do not move the line — only market performance does.
-        marketIndex: p.performanceIndex,
-      })),
-    [data],
+      data.map((p) => {
+        const point: Point = {
+          label: formatLabel(p.date),
+          dateIso: p.date,
+          totalValue: p.valueEur,
+          // Time-weighted return index from the server: 100 = flat, deposits
+          // and withdrawals do not move the line — only market performance does.
+          marketIndex: p.performanceIndex,
+        };
+        for (const b of benchmarks) {
+          point[`bench_${b.key}`] = b.indexByDate[p.date];
+        }
+        return point;
+      }),
+    [data, benchmarks],
   );
 
   const yAxis = useMemo<{ domain: [number, number]; ticks: number[] }>(() => {
     const values = points
-      .map((p) => p.marketIndex)
-      .filter((v) => Number.isFinite(v));
+      .flatMap((p) => [
+        p.marketIndex,
+        ...benchmarks.map((b) => p[`bench_${b.key}`]),
+      ])
+      .filter((v): v is number => v != null && Number.isFinite(v));
     if (values.length === 0) return { domain: [0, 1], ticks: [0, 1] };
 
     const min = Math.min(...values);
@@ -109,24 +131,16 @@ export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
     }
     if (ticks.length < 2) ticks.push(Math.round(minBound), Math.round(maxBound));
     return { domain: [minBound, maxBound], ticks };
-  }, [points]);
+  }, [points, benchmarks]);
 
   const formatYAxisTick = (value: number) =>
     `${Math.round(value - BASELINE)}%`;
-
-  const formatTooltipPercent = (marketIndex: number) => {
-    const pct = marketIndex - BASELINE;
-    return `${pct >= 0 ? "+" : ""}${formatPercent(pct / 100)}`;
-  };
 
   const renderTooltip = (props: ChartTooltipProps) => {
     const { active, payload } = props;
     if (!active || !payload || payload.length === 0) return null;
     const p = payload[0]?.payload;
-    const rawValue = payload[0]?.value;
-    const marketIndex =
-      typeof rawValue === "number" ? rawValue : Number.NaN;
-    if (!p || !Number.isFinite(marketIndex)) return null;
+    if (!p || !Number.isFinite(p.marketIndex)) return null;
     return (
       <div className="rounded-md border border-border/70 bg-card/95 px-3 py-2 shadow-sm">
         <p className="text-xs text-muted-foreground">
@@ -136,8 +150,25 @@ export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
           <SensitiveValue>{formatEur(p.totalValue)}</SensitiveValue>
         </p>
         <p className="text-xs text-muted-foreground">
-          ({formatTooltipPercent(marketIndex)})
+          ({formatIndexPercent(p.marketIndex)})
         </p>
+        {benchmarks.map((b) => {
+          const v = p[`bench_${b.key}`];
+          if (v == null || !Number.isFinite(v)) return null;
+          return (
+            <p key={b.key} className="mt-0.5 flex items-center gap-1.5 text-xs">
+              <span
+                aria-hidden
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: `hsl(var(${b.colorVar}))` }}
+              />
+              <span className="text-muted-foreground">{b.label}</span>
+              <span className="tabular-nums text-foreground">
+                {formatIndexPercent(v)}
+              </span>
+            </p>
+          );
+        })}
       </div>
     );
   };
@@ -145,7 +176,7 @@ export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
   return (
     <div className="w-full px-5 pb-5">
       <ResponsiveContainer width="100%" height={320}>
-        <AreaChart data={points}>
+        <ComposedChart data={points}>
           <defs>
             <linearGradient id="portfolioPerfFill" x1="0" y1="0" x2="0" y2="1">
               <stop
@@ -199,7 +230,20 @@ export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
             isAnimationActive={false}
             fill="url(#portfolioPerfFill)"
           />
-        </AreaChart>
+          {benchmarks.map((b) => (
+            <Line
+              key={b.key}
+              type="monotone"
+              dataKey={`bench_${b.key}`}
+              stroke={`hsl(var(${b.colorVar}))`}
+              strokeWidth={1.5}
+              strokeDasharray="5 3"
+              dot={false}
+              isAnimationActive={false}
+              connectNulls
+            />
+          ))}
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
