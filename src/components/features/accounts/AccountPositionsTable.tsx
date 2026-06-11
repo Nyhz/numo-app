@@ -1,8 +1,9 @@
+import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
 import { DataTable } from "@/src/components/ui/DataTable";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { StatesBlock } from "@/src/components/ui/StatesBlock";
-import { formatEur } from "@/src/lib/format";
+import { formatEur, formatPercent, formatQuantity } from "@/src/lib/format";
 import type { PositionRow } from "@/src/server/positions";
 
 export function AccountPositionsTable({ rows }: { rows: PositionRow[] }) {
@@ -27,38 +28,55 @@ export function AccountPositionsTable({ rows }: { rows: PositionRow[] }) {
           {
             key: "asset",
             header: "Activo",
-            cell: (r) => r.asset.symbol ?? r.asset.name,
-          },
-          {
-            key: "quantity",
-            header: "Cantidad",
-            align: "right",
             cell: (r) => (
-              <span className="tabular-nums">{r.position.quantity.toFixed(4)}</span>
+              <span className="flex items-center gap-1.5">
+                <span>{r.asset.symbol ?? r.asset.name}</span>
+                <Badge className="px-1.5 py-0 text-[11px] tabular-nums">
+                  {formatQuantity(r.position.quantity, {
+                    maximumFractionDigits: 8,
+                  })}
+                </Badge>
+              </span>
             ),
           },
           {
-            key: "avgCost",
-            header: "Coste medio (EUR)",
+            key: "cost",
+            header: "Comprar en",
             align: "right",
             cell: (r) => (
-              <SensitiveValue>{formatEur(r.position.averageCost)}</SensitiveValue>
+              <div className="flex flex-col items-end leading-tight">
+                <SensitiveValue className="tabular-nums">
+                  {formatEur(r.position.totalCostEur)}
+                </SensitiveValue>
+                <SensitiveValue className="text-xs tabular-nums text-muted-foreground">
+                  {formatEur(r.position.averageCost, { maximumFractionDigits: 4 })}
+                </SensitiveValue>
+              </div>
             ),
           },
           {
-            key: "marketValue",
-            header: "Valor de mercado (EUR)",
+            key: "value",
+            header: "Posición",
             align: "right",
             cell: (r) =>
               r.valuationEur == null ? (
                 <span className="text-muted-foreground">—</span>
               ) : (
-                <SensitiveValue>{formatEur(r.valuationEur)}</SensitiveValue>
+                <div className="flex flex-col items-end leading-tight">
+                  <SensitiveValue className="tabular-nums">
+                    {formatEur(r.valuationEur)}
+                  </SensitiveValue>
+                  <SensitiveValue className="text-xs tabular-nums text-muted-foreground">
+                    {formatEur(r.valuationEur / r.position.quantity, {
+                      maximumFractionDigits: 4,
+                    })}
+                  </SensitiveValue>
+                </div>
               ),
           },
           {
             key: "pnl",
-            header: "P/G no realizado (EUR)",
+            header: "Plusvalía",
             align: "right",
             cell: (r) => {
               if (r.valuationEur == null) {
@@ -69,8 +87,19 @@ export function AccountPositionsTable({ rows }: { rows: PositionRow[] }) {
               const pnl = r.valuationEur - r.position.totalCostEur;
               const color =
                 pnl > 0 ? "text-success" : pnl < 0 ? "text-destructive" : "";
+              const pct =
+                r.position.totalCostEur > 0 ? pnl / r.position.totalCostEur : null;
               return (
-                <SensitiveValue className={color}>{formatEur(pnl)}</SensitiveValue>
+                <div className={`flex flex-col items-end leading-tight ${color}`}>
+                  <SensitiveValue className="tabular-nums">
+                    {formatEur(pnl)}
+                  </SensitiveValue>
+                  {pct != null && (
+                    <span className="text-xs tabular-nums opacity-80">
+                      {`${pct >= 0 ? "+" : ""}${formatPercent(pct)}`}
+                    </span>
+                  )}
+                </div>
               );
             },
           },

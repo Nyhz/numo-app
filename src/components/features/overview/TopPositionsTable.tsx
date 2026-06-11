@@ -1,4 +1,5 @@
 import { AssetTypeStripe } from "@/src/components/ui/AssetTypeBadge";
+import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
 import { DataTable } from "@/src/components/ui/DataTable";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
@@ -42,8 +43,15 @@ export function TopPositionsTable({ rows }: { rows: TopPositionRow[] }) {
                   <AssetTypeStripe type={a.assetType} />
                   <div className="flex flex-col leading-tight">
                     <span className="font-medium">{a.name}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {symbol}
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {symbol}
+                      </span>
+                      <Badge className="px-1.5 py-0 text-[11px] tabular-nums">
+                        {formatQuantity(r.position.position.quantity, {
+                          maximumFractionDigits: 8,
+                        })}
+                      </Badge>
                     </span>
                   </div>
                 </div>
@@ -51,51 +59,36 @@ export function TopPositionsTable({ rows }: { rows: TopPositionRow[] }) {
             },
           },
           {
-            key: "qty",
-            header: "Cantidad",
-            align: "right",
-            cell: (r) => {
-              const isCrypto = r.position.asset.assetType === "crypto";
-              return (
-                <span className="tabular-nums">
-                  {formatQuantity(r.position.position.quantity, {
-                    maximumFractionDigits: isCrypto ? 8 : 4,
-                  })}
-                </span>
-              );
-            },
-          },
-          {
-            key: "avgBuy",
-            header: "Coste medio / ud.",
+            key: "cost",
+            header: "Comprar en",
             align: "right",
             cell: (r) => (
-              <SensitiveValue className="tabular-nums">
-                {formatUnit(r.averageCostEur)}
-              </SensitiveValue>
+              <div className="flex flex-col items-end leading-tight">
+                <SensitiveValue className="tabular-nums">
+                  {formatEur(r.position.position.totalCostEur)}
+                </SensitiveValue>
+                <SensitiveValue className="text-xs tabular-nums text-muted-foreground">
+                  {formatUnit(r.averageCostEur)}
+                </SensitiveValue>
+              </div>
             ),
           },
           {
-            key: "currentUnit",
-            header: "Precio actual / ud.",
-            align: "right",
-            cell: (r) => (
-              <SensitiveValue className="tabular-nums">
-                {formatUnit(r.unitPriceEur)}
-              </SensitiveValue>
-            ),
-          },
-          {
-            key: "currentTotal",
-            header: "Valor actual",
+            key: "value",
+            header: "Posición",
             align: "right",
             cell: (r) =>
               r.position.valuationEur == null ? (
                 <span className="text-muted-foreground">—</span>
               ) : (
-                <SensitiveValue className="tabular-nums">
-                  {formatEur(r.position.valuationEur)}
-                </SensitiveValue>
+                <div className="flex flex-col items-end leading-tight">
+                  <SensitiveValue className="tabular-nums">
+                    {formatEur(r.position.valuationEur)}
+                  </SensitiveValue>
+                  <SensitiveValue className="text-xs tabular-nums text-muted-foreground">
+                    {formatUnit(r.unitPriceEur)}
+                  </SensitiveValue>
+                </div>
               ),
           },
           {
