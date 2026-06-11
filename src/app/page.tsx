@@ -246,7 +246,7 @@ export default async function OverviewPage({
           </Suspense>
           <Suspense
             key={`bal:${suspenseKey}`}
-            fallback={<ChartCardSkeleton title="Evolución del saldo" />}
+            fallback={<ChartCardSkeleton title="Evolución del saldo" heightClass="h-72" />}
           >
             <SavingsBalanceCard accountId={selectedAccount.id} range={range} />
           </Suspense>
