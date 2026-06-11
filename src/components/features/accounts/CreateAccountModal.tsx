@@ -5,12 +5,13 @@ import { Modal } from "@/src/components/ui/Modal";
 import { Button } from "@/src/components/ui/Button";
 import { createAccount } from "@/src/actions/accounts";
 import { ACCOUNT_TYPES } from "@/src/actions/_constants";
-import { accountTypeLabel } from "@/src/lib/labels";
+import { ACCOUNT_COUNTRY_LABELS, accountTypeLabel } from "@/src/lib/labels";
 
 type FormState = {
   name: string;
   accountType: string;
   currency: string;
+  countryCode: string;
   openingBalanceNative: string;
   notes: string;
 };
@@ -19,6 +20,7 @@ const INITIAL: FormState = {
   name: "",
   accountType: "savings",
   currency: "EUR",
+  countryCode: "",
   openingBalanceNative: "0",
   notes: "",
 };
@@ -54,6 +56,7 @@ export function CreateAccountModal({
       name: form.name,
       accountType: form.accountType,
       currency: form.currency.toUpperCase(),
+      countryCode: form.countryCode === "" ? undefined : form.countryCode,
       openingBalanceNative: Number(form.openingBalanceNative),
       notes: form.notes.trim() ? form.notes : undefined,
     };
@@ -135,6 +138,25 @@ export function CreateAccountModal({
             <option value="EUR">EUR</option>
             <option value="USD">USD</option>
           </select>
+        </Field>
+
+        <Field label="País de la entidad" errors={fieldErrors.countryCode}>
+          <select
+            value={form.countryCode}
+            onChange={(e) => update("countryCode", e.target.value)}
+            className={inputClass}
+          >
+            <option value="">— Sin asignar —</option>
+            {Object.entries(ACCOUNT_COUNTRY_LABELS).map(([code, label]) => (
+              <option key={code} value={code}>
+                {label} ({code})
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-muted-foreground">
+            El país del custodio (broker/banco), no el de los activos que
+            contiene. Determina si la cuenta cuenta para el 720/721.
+          </span>
         </Field>
 
         <Field

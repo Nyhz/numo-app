@@ -5,6 +5,7 @@ import { buildTaxReport } from "@/src/server/tax/report";
 import { computeDriftSinceSeal, getSnapshotState } from "@/src/server/tax/seals";
 import { computeInformationalModelsStatus } from "@/src/server/tax/m720";
 import { aggregateBlocksFromBalances } from "@/src/server/tax/m720Aggregate";
+import { listDeclaredBaselines } from "@/src/server/tax/baselines";
 import { getTaxYears } from "@/src/server/tax/years";
 import { getInterestForYear } from "@/src/server/tax/interest";
 import { db } from "@/src/db/client";
@@ -34,6 +35,7 @@ export default async function TaxYearPage({ params }: { params: Params }) {
     ? snapshot.payload
     : computeInformationalModelsStatus(db, year, blocks);
   const drift = computeDriftSinceSeal(db, year);
+  const baselines = listDeclaredBaselines(db);
   const years = await getTaxYears();
   const interestEur = await getInterestForYear(year);
   const prevision = buildPrevision(report, interestEur);
@@ -72,7 +74,7 @@ export default async function TaxYearPage({ params }: { params: Params }) {
       />
       <GainsTable sales={report.sales} excludedSales={report.excludedSales} />
       <DividendsTable dividends={report.dividends} />
-      <YearEndCard models={models} />
+      <YearEndCard year={year} models={models} baselines={baselines} />
     </div>
   );
 }

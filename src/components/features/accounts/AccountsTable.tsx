@@ -9,12 +9,14 @@ import { DataTable } from "@/src/components/ui/DataTable";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { deleteAccount } from "@/src/actions/deleteAccount";
 import { formatEur, formatMoney } from "@/src/lib/format";
-import { accountTypeLabel } from "@/src/lib/labels";
+import { accountCountryLabel, accountTypeLabel } from "@/src/lib/labels";
 import type { AccountWithTotals } from "@/src/server/accounts";
 import { isCashBearingAccount } from "@/src/actions/_constants";
+import { EditAccountModal } from "./EditAccountModal";
 
 export function AccountsTable({ rows }: { rows: AccountWithTotals[] }) {
   const [target, setTarget] = React.useState<AccountWithTotals | null>(null);
+  const [editing, setEditing] = React.useState<AccountWithTotals | null>(null);
   const [banner, setBanner] = React.useState<string | null>(null);
 
   async function confirmDelete() {
@@ -49,6 +51,16 @@ export function AccountsTable({ rows }: { rows: AccountWithTotals[] }) {
             cell: (r) => accountTypeLabel(r.accountType),
           },
           { key: "currency", header: "Divisa", cell: (r) => r.currency },
+          {
+            key: "country",
+            header: "País",
+            cell: (r) =>
+              r.countryCode ? (
+                <span title={accountCountryLabel(r.countryCode)}>{r.countryCode}</span>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              ),
+          },
           {
             key: "eur",
             header: "Saldo (EUR)",
@@ -97,6 +109,15 @@ export function AccountsTable({ rows }: { rows: AccountWithTotals[] }) {
                     <DropdownMenu.Item
                       onSelect={() => {
                         setBanner(null);
+                        setEditing(r);
+                      }}
+                      className="flex cursor-pointer items-center rounded-sm px-2 py-1.5 outline-none data-[highlighted]:bg-accent"
+                    >
+                      Editar
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      onSelect={() => {
+                        setBanner(null);
                         setTarget(r);
                       }}
                       className="flex cursor-pointer items-center rounded-sm px-2 py-1.5 text-destructive outline-none data-[highlighted]:bg-accent"
@@ -111,6 +132,13 @@ export function AccountsTable({ rows }: { rows: AccountWithTotals[] }) {
         ]}
       />
 
+      <EditAccountModal
+        account={editing}
+        open={editing !== null}
+        onOpenChange={(next) => {
+          if (!next) setEditing(null);
+        }}
+      />
       <ConfirmModal
         open={target !== null}
         onOpenChange={(next) => {

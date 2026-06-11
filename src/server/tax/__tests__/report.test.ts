@@ -220,6 +220,40 @@ describe("buildTaxReport year-end balances", () => {
     expect(fresh.yearEndBalances[0].staleValuation).toBe(false);
     expect(fresh.yearEndBalances[0].valueEur).toBeCloseTo(1300, 2);
   });
+
+  it("never flags stale for the in-progress year — its Dec-31 hasn't happened", () => {
+    const db = makeDb();
+    const year = new Date().getUTCFullYear();
+    const accountId = ulid(); const assetId = ulid();
+    db.insert(accounts).values({
+      id: accountId, name: "IBKR", currency: "EUR", accountType: "broker",
+      countryCode: "IE", openingBalanceEur: 0, currentCashBalanceEur: 0,
+    }).run();
+    db.insert(assets).values({
+      id: assetId, name: "VWCE", assetType: "equity",
+      currency: "EUR", isActive: true, assetClassTax: "etf",
+    }).run();
+    db.insert(assetTransactions).values({
+      id: ulid(), accountId, assetId,
+      transactionType: "buy", tradedAt: Date.UTC(year, 0, 1),
+      quantity: 10, unitPrice: 100, tradeCurrency: "EUR", fxRateToEur: 1,
+      tradeGrossAmount: 1000, tradeGrossAmountEur: 1000, cashImpactEur: -1000,
+      feesAmount: 0, feesAmountEur: 0, netAmountEur: -1000,
+      isListed: true, source: "manual",
+    }).run();
+    // A January valuation is way more than 10 days before Dec 31, but the
+    // year is still open — the flag must stay off.
+    db.insert(schema.assetValuations).values({
+      id: ulid(), assetId, valuationDate: `${year}-01-01`,
+      quantity: 10, unitPriceEur: 120, marketValueEur: 1200,
+      priceSource: "test", createdAt: Date.now(),
+    }).run();
+    db.transaction((tx) => { recomputeLotsForAsset(tx as unknown as DB, assetId); });
+
+    const report = buildTaxReport(db, year);
+    expect(report.yearEndBalances).toHaveLength(1);
+    expect(report.yearEndBalances[0].staleValuation).toBe(false);
+  });
 });
 
 // Audit T7/R-9: dust-filtered disposals are disclosed, never silently dropped.

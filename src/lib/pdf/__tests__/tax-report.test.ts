@@ -65,7 +65,7 @@ function report(sales: SaleReportRow[], dividends: DividendReportRow[]): TaxRepo
   };
 }
 
-const emptyModels = { m720: { blocks: [] }, m721: { blocks: [] }, d6: { blocks: [] } };
+const emptyModels = { m720: { blocks: [] }, m721: { blocks: [] } };
 
 describe("buildTaxReportPdf", () => {
   it("builds a non-empty PDF for an empty year", () => {

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { ulid } from "ulid";
 import * as schema from "../../../db/schema";
 import type { DB } from "../../../db/client";
-import { taxYearSnapshots } from "../../../db/schema";
+import { taxDeclaredBaselines, taxYearSnapshots } from "../../../db/schema";
 import { computeInformationalModelsStatus, type Model720Block } from "../m720";
 
 function makeDb(): DB {
@@ -177,5 +177,96 @@ describe("computeInformationalModelsStatus", () => {
     const fr = res.m720.blocks.find((b) => b.country === "FR");
     expect(fr?.status).toBe("ok");
     expect(fr?.lastDeclaredEur).toBeNull();
+  });
+
+  // Manual baselines: filings made outside the app's seal flow (e.g. the
+  // ejercicio-2025 M720 filed with the AEAT before moving to the foral
+  // Hacienda) are recorded per category and become the Δ>20k comparator.
+  describe("manual declared baselines", () => {
+    it("suppresses 'declarar (≥50k)' and compares against the recorded amount", () => {
+      const db = makeDb();
+      db.insert(taxDeclaredBaselines).values({
+        id: ulid(), year: 2025, category: "broker-securities", amountEur: 59_278.24,
+      }).run();
+
+      const blocks: Model720Block[] = [
+        { country: "??", type: "broker-securities", valueEur: marketEur(59_278.24), hasUnvalued: false, hasStale: false, hasUnknownCountry: true },
+      ];
+      const res = computeInformationalModelsStatus(db, 2026, blocks);
+      const b = res.m720.blocks[0];
+      expect(b.status).toBe("ok");
+      expect(b.lastDeclaredEur).toBe(59_278.24);
+    });
+
+    it("flags delta_20k when the joint category value drifts >€20k from the baseline", () => {
+      const db = makeDb();
+      db.insert(taxDeclaredBaselines).values({
+        id: ulid(), year: 2025, category: "broker-securities", amountEur: 59_000,
+      }).run();
+
+      // Two countries: the baseline has no geography, so the delta is
+      // measured on the joint category value (which is what art. 42 bis
+      // measures anyway), not per block.
+      const blocks: Model720Block[] = [
+        { country: "IE", type: "broker-securities", valueEur: marketEur(50_000), hasUnvalued: false, hasStale: false },
+        { country: "DE", type: "broker-securities", valueEur: marketEur(30_000), hasUnvalued: false, hasStale: false },
+      ];
+      const res = computeInformationalModelsStatus(db, 2026, blocks);
+      expect(res.m720.blocks.find((b) => b.country === "IE")?.status).toBe("delta_20k");
+      expect(res.m720.blocks.find((b) => b.country === "DE")?.status).toBe("delta_20k");
+    });
+
+    it("does not pool the crypto baseline with securities", () => {
+      const db = makeDb();
+      db.insert(taxDeclaredBaselines).values({
+        id: ulid(), year: 2025, category: "crypto", amountEur: 55_000,
+      }).run();
+
+      const blocks: Model720Block[] = [
+        { country: "IE", type: "broker-securities", valueEur: marketEur(60_000), hasUnvalued: false, hasStale: false },
+        { country: "MT", type: "crypto", valueEur: marketEur(56_000), hasUnvalued: false, hasStale: false },
+      ];
+      const res = computeInformationalModelsStatus(db, 2026, blocks);
+      // securities never declared → first-declaration threshold still fires
+      expect(res.m720.blocks.find((b) => b.country === "IE")?.status).toBe("new");
+      // crypto declared at 55k, now 56k → within the €20k band
+      expect(res.m721.blocks.find((b) => b.country === "MT")?.status).toBe("ok");
+    });
+
+    it("ignores baselines for the viewed year and later", () => {
+      const db = makeDb();
+      db.insert(taxDeclaredBaselines).values({
+        id: ulid(), year: 2026, category: "broker-securities", amountEur: 59_000,
+      }).run();
+
+      const blocks: Model720Block[] = [
+        { country: "IE", type: "broker-securities", valueEur: marketEur(60_000), hasUnvalued: false, hasStale: false },
+      ];
+      const res = computeInformationalModelsStatus(db, 2026, blocks);
+      expect(res.m720.blocks[0].status).toBe("new");
+      expect(res.m720.blocks[0].lastDeclaredEur).toBeNull();
+    });
+
+    it("prefers a newer sealed declaration over an older manual baseline", () => {
+      const db = makeDb();
+      db.insert(taxDeclaredBaselines).values({
+        id: ulid(), year: 2024, category: "broker-securities", amountEur: 52_000,
+      }).run();
+      db.insert(taxYearSnapshots).values({
+        id: ulid(), year: 2025,
+        sealedAt: Date.UTC(2026, 0, 1),
+        payloadJson: JSON.stringify({
+          m720: { blocks: [{ country: "IE", type: "broker-securities", valueEur: 80_000, hasUnvalued: false, hasStale: false, status: "delta_20k", declared: true }] },
+        }),
+      }).run();
+
+      const blocks: Model720Block[] = [
+        { country: "IE", type: "broker-securities", valueEur: marketEur(85_000), hasUnvalued: false, hasStale: false },
+      ];
+      const res = computeInformationalModelsStatus(db, 2026, blocks);
+      const ie = res.m720.blocks[0];
+      expect(ie.status).toBe("ok");
+      expect(ie.lastDeclaredEur).toBe(80_000);
+    });
   });
 });

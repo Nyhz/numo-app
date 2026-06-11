@@ -12,3 +12,4 @@ export * from "./tax_lots";
 export * from "./tax_lot_consumptions";
 export * from "./tax_wash_sale_adjustments";
 export * from "./tax_year_snapshots";
+export * from "./tax_declared_baselines";

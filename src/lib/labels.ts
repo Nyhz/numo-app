@@ -45,3 +45,32 @@ export function transactionTypeLabel(type: string): string {
 export function ledgerLabel(label: string): string {
   return TRANSACTION_TYPE_LABELS[label] ?? CASH_MOVEMENT_LABELS[label] ?? label;
 }
+
+/** País de la ENTIDAD custodia (broker/banco), no de los activos que contiene
+ *  — es lo que decide si una cuenta alimenta los bloques del M720/M721.
+ *  Selector cerrado: un typo en texto libre rompería el contraste por
+ *  geografía. Lista acotada a custodios plausibles para este panel. */
+export const ACCOUNT_COUNTRY_LABELS: Record<string, string> = {
+  ES: "España",
+  NL: "Países Bajos",
+  IE: "Irlanda",
+  DE: "Alemania",
+  FR: "Francia",
+  LU: "Luxemburgo",
+  GB: "Reino Unido",
+  US: "Estados Unidos",
+  CH: "Suiza",
+  PT: "Portugal",
+  IT: "Italia",
+  BE: "Bélgica",
+  AT: "Austria",
+  EE: "Estonia",
+  LT: "Lituania",
+  MT: "Malta",
+  CY: "Chipre",
+};
+
+export function accountCountryLabel(code: string | null): string {
+  if (!code) return "Sin asignar";
+  return ACCOUNT_COUNTRY_LABELS[code] ?? code;
+}

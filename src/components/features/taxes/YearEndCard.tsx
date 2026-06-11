@@ -3,6 +3,8 @@ import { Badge, type BadgeProps } from "@/src/components/ui/Badge";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur } from "@/src/lib/format";
 import type { AnnotatedBlock, InformationalModelsStatus } from "@/src/server/tax/m720";
+import type { TaxDeclaredBaseline } from "@/src/db/schema";
+import { DeclaredBaselinesPanel } from "./DeclaredBaselinesPanel";
 
 // Theme-token Badge variants only — the previous hardcoded ambers were
 // unreadable in light mode and bypassed the theme system.
@@ -95,21 +97,28 @@ function BlockList({ title, blocks }: { title: string; blocks: AnnotatedBlock[] 
   );
 }
 
-export function YearEndCard({ models }: { models: InformationalModelsStatus }) {
-  const hasUnvalued = [...models.m720.blocks, ...models.m721.blocks, ...models.d6.blocks].some(
+export function YearEndCard({
+  year,
+  models,
+  baselines,
+}: {
+  year: number;
+  models: InformationalModelsStatus;
+  baselines: TaxDeclaredBaseline[];
+}) {
+  const hasUnvalued = [...models.m720.blocks, ...models.m721.blocks].some(
     (b) => b.hasUnvalued,
   );
-  const hasUnknownCountry = [
-    ...models.m720.blocks,
-    ...models.m721.blocks,
-    ...models.d6.blocks,
-  ].some((b) => b.hasUnknownCountry);
+  const hasUnknownCountry = [...models.m720.blocks, ...models.m721.blocks].some(
+    (b) => b.hasUnknownCountry,
+  );
   return (
-    <Card title="Bienes en el extranjero a 31-dic (modelos 720 · 721 · D-6)">
+    <Card title="Bienes en el extranjero a 31-dic (modelos 720 · 721)">
       <p className="px-4 pt-3 text-xs text-muted-foreground">
-        Declaraciones informativas ante la Hacienda Foral: cuentas y valores en el
-        extranjero (720), cripto en el extranjero (721) y valores depositados fuera (D-6).
-        Solo obligan a partir de 50.000 € conjuntos por categoría (todos los países a la vez).
+        Declaraciones informativas: cuentas y valores en el extranjero (720) y cripto en
+        el extranjero (721). Solo obligan a partir de 50.000 € conjuntos por categoría
+        (todos los países a la vez), y se renuevan cuando la categoría varía más de
+        20.000 € respecto a lo último declarado.
       </p>
       {hasUnvalued ? (
         <div
@@ -131,11 +140,11 @@ export function YearEndCard({ models }: { models: InformationalModelsStatus }) {
           afectadas (página Accounts).
         </div>
       ) : null}
-      <div className="grid gap-4 p-4 md:grid-cols-3">
+      <div className="grid gap-4 p-4 md:grid-cols-2">
         <BlockList title="Modelo 720 — cuentas y valores" blocks={models.m720.blocks} />
         <BlockList title="Modelo 721 — criptomonedas" blocks={models.m721.blocks} />
-        <BlockList title="Modelo D-6 — valores depositados" blocks={models.d6.blocks} />
       </div>
+      <DeclaredBaselinesPanel baselines={baselines} defaultYear={year - 1} />
     </Card>
   );
 }

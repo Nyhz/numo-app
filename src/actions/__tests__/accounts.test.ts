@@ -11,7 +11,7 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
-import { createAccount } from "../accounts";
+import { createAccount, updateAccount } from "../accounts";
 
 function makeDb(): DB {
   const sqlite = new Database(":memory:");
@@ -133,5 +133,70 @@ describe("createAccount action", () => {
 
     const rows = await db.select().from(schema.accounts).all();
     expect(rows).toHaveLength(0);
+  });
+
+  it("stores the custodian country, uppercased", async () => {
+    const result = await createAccount(
+      { name: "DEGIRO", accountType: "broker", countryCode: "nl" },
+      db,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.countryCode).toBe("NL");
+  });
+});
+
+describe("updateAccount action", () => {
+  let db: DB;
+  beforeEach(() => {
+    db = makeDb();
+  });
+
+  async function seed(): Promise<string> {
+    const created = await createAccount({ name: "DEGIRO", accountType: "broker" }, db);
+    if (!created.ok) throw new Error("seed failed");
+    return created.data.id;
+  }
+
+  it("updates name and country with an audit event", async () => {
+    const id = await seed();
+    const result = await updateAccount({ id, name: "DEGIRO B.V.", countryCode: "nl" }, db);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.countryCode).toBe("NL");
+    expect(result.data.name).toBe("DEGIRO B.V.");
+
+    const audit = await db
+      .select()
+      .from(schema.auditEvents)
+      .where(eq(schema.auditEvents.action, "update"))
+      .all();
+    expect(audit).toHaveLength(1);
+    expect(audit[0].entityType).toBe("account");
+    expect(audit[0].previousJson).toContain('"countryCode":null');
+  });
+
+  it("clears the country with null", async () => {
+    const id = await seed();
+    await updateAccount({ id, name: "DEGIRO", countryCode: "NL" }, db);
+    const cleared = await updateAccount({ id, name: "DEGIRO", countryCode: null }, db);
+    expect(cleared.ok).toBe(true);
+    if (!cleared.ok) return;
+    expect(cleared.data.countryCode).toBeNull();
+  });
+
+  it("rejects a malformed country code", async () => {
+    const id = await seed();
+    const result = await updateAccount({ id, name: "DEGIRO", countryCode: "NLD" }, db);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.fieldErrors?.countryCode?.length).toBeGreaterThan(0);
+  });
+
+  it("returns not_found for an unknown account", async () => {
+    const result = await updateAccount({ id: "nope", name: "X", countryCode: null }, db);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("not_found");
   });
 });

@@ -11,7 +11,6 @@ const models: InformationalModelsStatus = {
   m721: { blocks: [
     { country: "MT", type: "crypto", valueEur: marketEur(60_000), hasUnvalued: false, hasStale: false, status: "new", lastDeclaredEur: null },
   ] },
-  d6: { blocks: [] },
 };
 
 describe("buildM720DiffJson / Csv", () => {

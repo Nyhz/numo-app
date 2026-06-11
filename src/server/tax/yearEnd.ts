@@ -3,7 +3,7 @@ import { roundEur } from "../../lib/money";
 import { marketEur, type MarketEur } from "../../lib/money-types";
 import type { DB } from "../../db/client";
 // This module is the ONE sanctioned consumer of asset_valuations inside
-// src/server/tax/ (see eslint.config.mjs): Modelo 720/721/D-6 declare market
+// src/server/tax/ (see eslint.config.mjs): Modelo 720/721 declare market
 // value at year-end by legal definition. Everything else in the tax engine is
 // barred from market tables at lint level.
 import { accounts, assets, assetTransactions, assetValuations } from "../../db/schema";
@@ -38,6 +38,10 @@ export function buildYearEndBalances(db: DB, end: number): YearEndBalance[] {
   const staleCutoffIso = new Date(
     end - (1 + YEAR_END_VALUATION_STALE_DAYS) * 86_400_000,
   ).toISOString().slice(0, 10);
+  // An in-progress exercise has no Dec-31 yet — every live price is "older
+  // than 10 days before year-end" by construction, so the stale flag would be
+  // permanent noise. It only means something once the year has closed.
+  const yearClosed = end <= Date.now();
 
   // Per-account holdings come from the transaction ledger, not residual lots
   // (audit T10): FIFO lot consumption is global across accounts (Spanish
@@ -86,7 +90,7 @@ export function buildYearEndBalances(db: DB, end: number): YearEndBalance[] {
       valuationDate: valuation?.valuationDate ?? null,
       priceSource: valuation?.priceSource ?? null,
       unvalued: !valuation,
-      staleValuation: valuation ? valuation.valuationDate < staleCutoffIso : false,
+      staleValuation: yearClosed && valuation != null && valuation.valuationDate < staleCutoffIso,
     });
   }
   return yearEndBalances;

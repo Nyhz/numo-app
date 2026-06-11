@@ -549,7 +549,7 @@ export function buildTaxReportPdf(input: TaxPdfInput): Uint8Array {
   cur.y += 10;
 
   // ── 7 · Modelos informativos ──────────────────────────────────────────────
-  sectionTitle(cur, 7, "Modelos informativos (720 · 721 · D-6)");
+  sectionTitle(cur, 7, "Modelos informativos (720 · 721)");
   const renderBlocks = (label: string, blocks: InformationalModelsStatus["m720"]["blocks"]) => {
     room(18);
     doc.setFont("helvetica", "bold");
@@ -582,7 +582,6 @@ export function buildTaxReportPdf(input: TaxPdfInput): Uint8Array {
   };
   renderBlocks("Modelo 720 — bienes y derechos en el extranjero", input.models.m720.blocks);
   renderBlocks("Modelo 721 — monedas virtuales en el extranjero", input.models.m721.blocks);
-  renderBlocks("Modelo D-6 — valores negociables depositados en el extranjero", input.models.d6.blocks);
 
   // Nota final.
   room(20);
