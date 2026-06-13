@@ -87,6 +87,16 @@ export function AssetsTable({ rows }: { rows: AssetListRow[] }) {
           },
           { key: "currency", header: "Divisa", cell: (r) => r.currency },
           {
+            key: "ter",
+            header: "TER",
+            cell: (r) =>
+              r.ter != null ? (
+                `${r.ter.toLocaleString("es-ES", { maximumFractionDigits: 2 })} %`
+              ) : (
+                <span className="text-xs text-muted-foreground">—</span>
+              ),
+          },
+          {
             key: "price",
             header: "Precio",
             cell: (r) => <FreshnessCell row={r} />,

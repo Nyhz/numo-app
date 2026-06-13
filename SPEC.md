@@ -337,6 +337,19 @@ CRON_SECRET=<random>
 YAHOO_USER_AGENT=<optional override>
 COINGECKO_API_KEY=<optional, enables crypto price sync>
 PORT=3200
+
+# AI advisor (asesor). Uses the Claude Agent SDK via the Max subscription token,
+# so usage draws on the plan's monthly credit. NEVER set ANTHROPIC_API_KEY too —
+# it wins auth precedence and would bypass the credit (the advisor refuses to run).
+CLAUDE_CODE_OAUTH_TOKEN=<from `claude setup-token`>
+ADVISOR_ENABLED=true
+ADVISOR_CHAT_MODEL=claude-opus-4-8
+ADVISOR_SCAN_MODEL=claude-sonnet-4-6
+ADVISOR_DIGEST_MAX_BYTES=8192
+ADVISOR_PROFILE_MAX_BYTES=4096
+ADVISOR_TELEGRAM_ENABLED=true
+TELEGRAM_BOT_TOKEN=<bot de @BotFather, para el report matinal>
+TELEGRAM_CHAT_ID=<chat del usuario con el bot>
 ```
 
 No `NEXT_PUBLIC_API_URL` — data is fetched server-side via Drizzle, not HTTP.

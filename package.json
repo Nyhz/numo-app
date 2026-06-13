@@ -14,10 +14,14 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:backup": "tsx scripts/backup-db.ts",
     "sync:prices": "curl -fsS -H \"x-cron-secret: $CRON_SECRET\" http://localhost:3200/api/cron/sync-prices",
+    "advisor:scan": "curl -fsS --max-time 600 -H \"x-cron-secret: $CRON_SECRET\" http://localhost:3200/api/cron/advisor-scan",
+    "advisor:curate": "curl -fsS --max-time 600 -H \"x-cron-secret: $CRON_SECRET\" http://localhost:3200/api/cron/advisor-curate",
+    "advisor:chat-compact": "curl -fsS --max-time 300 -H \"x-cron-secret: $CRON_SECRET\" http://localhost:3200/api/cron/advisor-chat-compact",
     "backfill:asset-class": "tsx scripts/backfill-asset-class.ts",
     "backfill:tax-lots": "tsx scripts/backfill-tax-lots.ts"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.177",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "better-sqlite3": "^12.9.0",

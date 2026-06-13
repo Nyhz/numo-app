@@ -11,6 +11,8 @@ import {
   Receipt,
   ScrollText,
   Settings,
+  Sparkles,
+  TrendingUp,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -28,6 +30,8 @@ const primaryItems: NavItem[] = [
   { href: "/accounts", label: "Cuentas", icon: Wallet },
   { href: "/assets", label: "Activos", icon: Coins },
   { href: "/objectives", label: "Objetivos", icon: Crosshair },
+  { href: "/simulador", label: "Simulador", icon: TrendingUp },
+  { href: "/asesor", label: "Asesor", icon: Sparkles },
   { href: "/transactions", label: "Transacciones", icon: ArrowLeftRight },
   { href: "/taxes", label: "Fiscalidad", icon: Receipt },
 ];

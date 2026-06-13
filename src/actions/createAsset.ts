@@ -42,6 +42,7 @@ export async function createAsset(
           name: data.name,
           assetType: data.assetType,
           symbol: data.symbol,
+          ter: data.ter ?? null,
           isin: data.isin ?? null,
           exchange: data.exchange ?? null,
           providerSymbol: data.providerSymbol ?? null,

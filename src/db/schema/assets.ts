@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { createdAtCol, idCol, updatedAtCol } from "./_shared";
 import { objectives } from "./objectives";
 
@@ -15,6 +15,10 @@ export const assets = sqliteTable(
     exchange: text("exchange"),
     providerSymbol: text("provider_symbol"),
     currency: text("currency").notNull().default("EUR"),
+    /** Total Expense Ratio as an annual percentage (e.g. 0.22 = 0.22%/year).
+     *  Manual entry per fund/ETF; null for instruments without a TER (stocks,
+     *  crypto). Drives the estimated annual cost in the Costes card. */
+    ter: real("ter"),
     assetClassTax: text("asset_class_tax"),
     /** Allocation bucket this asset's value counts toward (Objetivos page).
      *  Per-asset on purpose — aggregates the same exposure across brokers. */

@@ -13,6 +13,7 @@ type FormState = {
   symbol: string;
   isin: string;
   assetType: string;
+  ter: string;
   exchange: string;
   providerSymbol: string;
   isActive: boolean;
@@ -24,10 +25,19 @@ function stateFromAsset(a: Asset): FormState {
     symbol: a.symbol ?? "",
     isin: a.isin ?? "",
     assetType: a.assetType,
+    ter: a.ter != null ? String(a.ter) : "",
     exchange: a.exchange ?? "",
     providerSymbol: a.providerSymbol ?? "",
     isActive: a.isActive,
   };
+}
+
+/** "0,22" / "0.22" / "" → 0.22 | null. Accepts Spanish decimal comma. */
+function parseTer(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed.replace(",", "."));
+  return Number.isFinite(value) ? value : null;
 }
 
 export function EditAssetModal({
@@ -64,6 +74,7 @@ export function EditAssetModal({
       symbol: form.symbol,
       isin: form.isin.trim() ? form.isin.trim() : null,
       assetType: form.assetType,
+      ter: parseTer(form.ter),
       exchange: form.exchange.trim() ? form.exchange.trim() : null,
       providerSymbol: form.providerSymbol.trim() ? form.providerSymbol.trim() : null,
       isActive: form.isActive,
@@ -144,6 +155,20 @@ export function EditAssetModal({
               </option>
             ))}
           </select>
+        </Field>
+
+        <Field label="TER (% anual)" errors={fieldErrors.ter}>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={form.ter}
+            onChange={(e) => update("ter", e.target.value)}
+            className={inputClass}
+            placeholder="opcional — p. ej. 0,22"
+          />
+          <span className="text-xs text-muted-foreground">
+            Coste anual del fondo. Alimenta el coste estimado del Extracto.
+          </span>
         </Field>
 
         <Field label="Mercado" errors={fieldErrors.exchange}>

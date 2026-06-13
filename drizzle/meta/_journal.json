@@ -120,6 +120,20 @@
       "when": 1781348705928,
       "tag": "0016_dizzy_maestro",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1781378529600,
+      "tag": "0017_stormy_nova",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1781384414342,
+      "tag": "0018_low_old_lace",
+      "breakpoints": true
     }
   ]
 }

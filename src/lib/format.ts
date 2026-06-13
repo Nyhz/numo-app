@@ -28,9 +28,15 @@ export function formatEur(
   }).format(amount);
 }
 
-/** Formato compacto para ejes de gráficos: «12,3 k€» / «950 €». */
+/** Formato compacto para ejes de gráficos: «1,5 M€» / «12,3 k€» / «950 €».
+ *  Por encima del millón usa M€ — «1.200 k€» (mil-doscientos-k) se lee fatal
+ *  con el punto de millar español. */
 export function formatEurCompact(value: number): string {
-  if (Math.abs(value) >= 1000) {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) {
+    return `${(value / 1_000_000).toLocaleString(LOCALE, { maximumFractionDigits: 1 })} M€`;
+  }
+  if (abs >= 1000) {
     return `${(value / 1000).toLocaleString(LOCALE, { maximumFractionDigits: 1 })} k€`;
   }
   return `${value.toLocaleString(LOCALE, { maximumFractionDigits: 0 })} €`;

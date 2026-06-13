@@ -9,6 +9,7 @@ import { DataTable } from "@/src/components/ui/DataTable";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { ChartCardSkeleton } from "@/src/components/features/overview/skeletons";
 import { AllocationDonut } from "@/src/components/features/statement/AllocationDonut";
+import { CostsCard } from "@/src/components/features/statement/CostsCard";
 import {
   CurrencyExposure,
   type CurrencySlice,
@@ -32,6 +33,7 @@ import {
   type StatementReport,
 } from "@/src/server/statement";
 import { getSectorAllocation } from "@/src/server/sectors";
+import { getCostsSummary } from "@/src/server/costs";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -243,9 +245,10 @@ export default async function StatementPage({
 }) {
   const params = await searchParams;
   const range = parseRange(params.range);
-  const [report, sectorAllocation] = await Promise.all([
+  const [report, sectorAllocation, costs] = await Promise.all([
     getStatementReport(),
     getSectorAllocation(),
+    getCostsSummary(),
   ]);
   const hasPositions = report.totals.positionsCount > 0;
 
@@ -364,6 +367,10 @@ export default async function StatementPage({
           )}
         </Card>
       )}
+
+      <Card title="Costes — comisiones y TER">
+        <CostsCard summary={costs} />
+      </Card>
 
       <Card title="Cuentas">
         {report.accounts.length === 0 ? (

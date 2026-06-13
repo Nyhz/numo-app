@@ -1,17 +1,21 @@
+import { resolve } from "node:path";
 import { Card } from "@/src/components/ui/Card";
 import { WipeAppCard } from "@/src/components/features/settings/WipeAppCard";
+import { ProfileEditor } from "@/src/components/features/advisor/ProfileEditor";
+import { readProfile } from "@/src/lib/advisor/memory";
 
-function maskPath(p: string | undefined): string {
+export const dynamic = "force-dynamic";
+
+function fullDbPath(p: string | undefined): string {
   if (!p) return "(sin definir)";
-  if (p.length <= 8) return "••••";
-  return `${p.slice(0, 4)}…${p.slice(-6)}`;
+  return resolve(process.cwd(), p);
 }
 
 export default function SettingsPage() {
   const rows: { label: string; value: string }[] = [
     { label: "Nombre de la aplicación", value: "Finances Panel" },
     { label: "Moneda base", value: "EUR" },
-    { label: "DB_PATH", value: maskPath(process.env.DB_PATH) },
+    { label: "DB_PATH", value: fullDbPath(process.env.DB_PATH) },
     { label: "Versión de Node", value: process.version },
   ];
 
@@ -32,11 +36,13 @@ export default function SettingsPage() {
               className="grid grid-cols-[10rem_1fr] gap-4 py-3 text-sm"
             >
               <dt className="font-medium text-muted-foreground">{r.label}</dt>
-              <dd className="font-mono tabular-nums">{r.value}</dd>
+              <dd className="font-mono tabular-nums break-all">{r.value}</dd>
             </div>
           ))}
         </dl>
       </Card>
+
+      <ProfileEditor initialContent={readProfile()} defaultOpen />
 
       <WipeAppCard />
     </div>

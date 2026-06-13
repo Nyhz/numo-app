@@ -13,6 +13,7 @@ type FormState = {
   isin: string;
   assetType: string;
   currency: string;
+  ter: string;
   exchange: string;
   providerSymbol: string;
   isActive: boolean;
@@ -24,10 +25,19 @@ const INITIAL: FormState = {
   isin: "",
   assetType: "etf",
   currency: "EUR",
+  ter: "",
   exchange: "",
   providerSymbol: "",
   isActive: true,
 };
+
+/** "0,22" / "0.22" / "" → 0.22 | null. Accepts Spanish decimal comma. */
+function parseTer(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed.replace(",", "."));
+  return Number.isFinite(value) ? value : null;
+}
 
 export function CreateAssetModal({
   open,
@@ -62,6 +72,7 @@ export function CreateAssetModal({
       isin: form.isin.trim() ? form.isin.trim() : null,
       assetType: form.assetType,
       currency: form.currency.toUpperCase(),
+      ter: parseTer(form.ter),
       exchange: form.exchange.trim() ? form.exchange.trim() : null,
       providerSymbol: form.providerSymbol.trim() ? form.providerSymbol.trim() : null,
       isActive: form.isActive,
@@ -161,6 +172,20 @@ export function CreateAssetModal({
             <option value="EUR">EUR</option>
             <option value="USD">USD</option>
           </select>
+        </Field>
+
+        <Field label="TER (% anual)" errors={fieldErrors.ter}>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={form.ter}
+            onChange={(e) => update("ter", e.target.value)}
+            className={inputClass}
+            placeholder="opcional — p. ej. 0,22 para un fondo/ETF"
+          />
+          <span className="text-xs text-muted-foreground">
+            Coste anual del fondo. Alimenta el coste estimado del Extracto.
+          </span>
         </Field>
 
         <Field label="Mercado" errors={fieldErrors.exchange}>

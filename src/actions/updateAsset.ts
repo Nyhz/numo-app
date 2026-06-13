@@ -39,6 +39,7 @@ export async function updateAsset(
       if (patch.symbol !== undefined) next.symbol = patch.symbol;
       if (patch.isin !== undefined) next.isin = patch.isin;
       if (patch.assetType !== undefined) next.assetType = patch.assetType;
+      if (patch.ter !== undefined) next.ter = patch.ter;
       if (patch.exchange !== undefined) next.exchange = patch.exchange;
       if (patch.providerSymbol !== undefined) next.providerSymbol = patch.providerSymbol;
       if (patch.isActive !== undefined) next.isActive = patch.isActive;
