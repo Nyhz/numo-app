@@ -20,7 +20,8 @@
     "backfill:asset-class": "tsx scripts/backfill-asset-class.ts",
     "backfill:tax-lots": "tsx scripts/backfill-tax-lots.ts",
     "tg:net": "tsx scripts/tg-net.ts",
-    "tg:ask": "NODE_OPTIONS='--conditions=react-server' tsx scripts/tg-ask.ts"
+    "tg:ask": "NODE_OPTIONS='--conditions=react-server' tsx scripts/tg-ask.ts",
+    "tg:bot": "NODE_OPTIONS='--conditions=react-server' tsx scripts/tg-bot.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.177",
