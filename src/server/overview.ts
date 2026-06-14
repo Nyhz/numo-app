@@ -34,7 +34,10 @@ export type OverviewFilters = {
 export type OverviewKpis = {
   totalNetWorthEur: number;
   cashEur: number;
+  /** Cost basis of the positions (what was paid, fees included). */
   investedEur: number;
+  /** Current market value of the positions. With cash it sums to net worth. */
+  investedMarketValueEur: number;
   unrealizedPnlEur: number;
   unrealizedPnlPct: number | null;
   /** Money-weighted annual return (XIRR) over the selected window — the
@@ -211,6 +214,7 @@ export async function getOverviewKpis(
     totalNetWorthEur: cashEur + marketValueEur,
     cashEur,
     investedEur,
+    investedMarketValueEur: marketValueEur,
     unrealizedPnlEur,
     unrealizedPnlPct,
     xirrPct,
