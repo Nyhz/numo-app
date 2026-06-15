@@ -167,13 +167,17 @@ export function ObjectivesPie({
         onPointerUp={endDrag}
         onPointerLeave={endDrag}
       >
-        {/* Reality ring (inner) */}
+        {/* Reality ring (inner). A card-coloured stroke separates adjacent
+            slices so warm colours don't bleed into one muddy band. */}
         {actualSegments.map((seg, i) => (
           <path
             key={`actual-${i}`}
             d={ringSlicePath(ACTUAL_R0, ACTUAL_R1, seg.from, seg.to)}
             fill={seg.color}
-            opacity={seg.muted ? 0.25 : 0.55}
+            opacity={seg.muted ? 0.35 : 0.82}
+            stroke="hsl(var(--card))"
+            strokeWidth={2}
+            strokeLinejoin="round"
           />
         ))}
         {/* Target ring (outer, draggable) */}
@@ -185,6 +189,9 @@ export function ObjectivesPie({
               key={s.id}
               d={ringSlicePath(TARGET_R0, TARGET_R1, from, to)}
               fill={s.color}
+              stroke="hsl(var(--card))"
+              strokeWidth={2}
+              strokeLinejoin="round"
             >
               <title>{`${s.label}: objetivo ${Math.round(shares[i])} % · real ${s.actualPct.toFixed(1)} %`}</title>
             </path>

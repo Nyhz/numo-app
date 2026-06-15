@@ -141,6 +141,20 @@
       "when": 1781440589963,
       "tag": "0019_freezing_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1781560046010,
+      "tag": "0020_medical_silvermane",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1781563483150,
+      "tag": "0021_optimal_piledriver",
+      "breakpoints": true
     }
   ]
 }

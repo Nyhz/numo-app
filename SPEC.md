@@ -1,4 +1,4 @@
-# SPEC.md — Finances Panel
+# SPEC.md — Patrimonio (Finances Panel)
 
 > Standalone personal investment dashboard. EUR-first, single-user, LAN-only.
 > Ported from the `second-brain` monorepo into a fully self-contained Next.js app. No Docker, no Bun, no external API service, no workspace dependencies. pnpm + Node 22+ only.
@@ -51,7 +51,9 @@ Turbopack is disabled at scaffold time because gates run `next build` (webpack),
 | Tests | Vitest (unit) |
 | Lint | ESLint (the config that ships with `create-next-app`) |
 | PDF | `jspdf` (or equivalent) for account statements and tax reports |
-| Price source | `yahoo-finance2` (Yahoo Finance unofficial SDK) |
+| Price source | `yahoo-finance2` (equities/ETFs/FX) + CoinGecko (crypto, EUR-native) |
+| Composition data | Yahoo (sectors, via `topHoldings`/`assetProfile`) + JustETF (geography by ISIN, scraped) |
+| AI advisor | Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`), billed to the Max subscription via `CLAUDE_CODE_OAUTH_TOKEN` |
 
 ### Not used
 Docker, Bun, monorepo tooling, Postgres, workspace packages, external HTTP API service, separate worker process. The price-sync worker is inlined as a cron-triggered route.
@@ -106,6 +108,7 @@ Recharts, styled via CSS variables so they track the theme. Tooltips minimal —
 - **Price line chart** — single-series line, range-aware Y-axis (min/max + ~5% margin, not zero-based).
 - **Area performance chart** — filled area of cumulative portfolio value.
 - **Allocation donut** — holdings split by asset type or by account.
+- **Composition donut** — portfolio split by equity sector (Yahoo), by geographic region/continent (JustETF), or by allocation objective (the `/objectives` buckets). Geography is geography-only (non-classifiable value omitted); sectors bucket the remainder as «Sin clasificar»; objectives colour each slice from its stored theme token.
 - **Sparkline** — inline trend for table rows.
 - **Cash trend chart** — stacked cash balance over time.
 
@@ -121,13 +124,21 @@ Recharts, styled via CSS variables so they track the theme. Tooltips minimal —
 | `/accounts` | List of accounts with cash balances and account-type badges. Create/delete. |
 | `/accounts/[accountId]` | Account detail — positions, performance chart, ledger, export statement PDF. |
 | `/assets` | Master asset list with current holdings, create/edit/deactivate, manual price override. |
-| `/transactions` | Unified timeline of asset trades + cash movements. Create flow. Import CSV. |
-| `/taxes` | Yearly tax summary — realized gains, dividends, withholding tax. Year selector. Export PDF. |
-| `/statement` | Visual portfolio statement — value chart with range selector, allocation donut by asset type, value by account, P&L by type, holdings grouped by type, accounts table. Export PDF / XLSX / CSV via `/api/exports/statement?format=`. |
+| `/transactions` | Unified timeline of asset trades + cash movements. Manual create flow (buy / sell / dividend / fee / swap / cash movement). **No CSV import** — the broker importers were removed 2026-06; manual entry is the only registration path. |
+| `/statement` | Visual portfolio statement — value chart with range selector, reparto por tipo de activo, composición por regiones geográficas (JustETF), riesgo (caída desde máximos + volatilidad), composición por objetivos (1/3) y por sectores (2/3, Yahoo), value by account, P&L by type, holdings grouped by type, costes (comisiones + TER), accounts table. Export PDF / XLSX / CSV via `/api/exports/statement?format=`. |
+| `/objectives` | Objetivos de asignación por activo — peso actual vs. objetivo, desviación (% y €), planificador de aportación. |
+| `/simulador` | Simulador FIRE de interés compuesto — escenarios pesimista/base/optimista, año bola de nieve, regla del 4 %. Prerellenado con el patrimonio actual. |
+| `/asesor` | Asesor financiero IA — chat con contexto de cartera, pestañas de conversación persistentes, coste mensual del crédito, toggle de scans de mercado. |
+| `/taxes` | Redirige al año fiscal más reciente. |
+| `/taxes/[year]` | Informe fiscal anual foral (Bizkaia): Declaración (FIFO lote a lote), Previsión (coeficientes forales), dividendos, retenciones/DDI, M720/M721, sellado de año. Export CSV (casillas / detalle), JSON/CSV (M720-diff), PDF. |
+| `/settings` | Ajustes — tarjeta de entorno (solo lectura) + editor del perfil de inversor que alimenta al asesor. |
 | `/audit` | Audit log of entity mutations, filterable by entity type/id. |
 | `/health` | JSON health check. |
-| `POST /api/cron/sync-prices` | Cron-triggered price sync route (shared-token gated). |
-| `/api/exports/*` | PDF/XLSX/CSV export endpoints. |
+| `POST /api/cron/sync-prices` | Price + composition sync (shared-token gated). |
+| `POST /api/cron/backfill-prices` | On-demand historical price backfill. |
+| `POST /api/cron/advisor-scan` \| `advisor-curate` \| `advisor-chat-compact` | AI advisor maintenance crons (market scan + morning brief, weekly digest curation, weekly chat compaction). |
+| `POST /api/advisor/chat` | Streaming advisor chat endpoint. |
+| `/api/exports/{statement,account-statement,tax/casillas,tax/detail,tax/m720-diff,tax/pdf}` | PDF / XLSX / CSV / JSON export endpoints. |
 
 ### Layout shell
 - **Top nav** — brand on left, account quick-switcher center, theme toggle + sensitive toggle on right.
@@ -144,7 +155,7 @@ All monetary values are stored in EUR (base currency) alongside native currency 
 
 **Account** — `id`, `name`, `currency`, `accountType` (broker / bank / crypto / cash / other), `openingBalanceEur`, `currentCashBalanceEur`, `createdAt`, `updatedAt`.
 
-**Asset** — `id`, `name`, `assetType` (etf / stock / bond / crypto / fund / cash-equivalent / other), `subtype` (optional), `symbol`, `ticker`, `isin`, `exchange`, `providerSymbol` (Yahoo Finance symbol override), `currency`, `isActive`, `notes`.
+**Asset** — `id`, `name`, `assetType` (etf / stock / bond / crypto / fund / cash-equivalent / other), `subtype` (optional), `symbol`, `ticker`, `isin`, `exchange`, `providerSymbol` (Yahoo Finance symbol override), `currency`, `ter` (annual %), `objectiveId`, `excludeFromObjectives` (leave out of the allocation plan), `isActive`, `notes`.
 
 **AssetPosition** (one per asset, aggregated) — `id`, `assetId`, `quantity`, `averageCost` (EUR), `manualPrice`, `manualPriceAsOf`.
 
@@ -160,7 +171,15 @@ All monetary values are stored in EUR (base currency) alongside native currency 
 
 **AuditEvent** — `id`, `entityType`, `entityId`, `action` (`create` / `update` / `delete`), `actorType` (`user` / `system`), `source`, `summary`, `previousJson`, `nextJson`, `contextJson`, `createdAt`.
 
-**TransactionImport** / **TransactionImportRow** — metadata and per-row results for CSV import batches (row status, error message, fingerprint).
+**FxRate** — `currency`, `asOfDate`, `rateToEur`, `source` (`yahoo` / broker / manual). Date-keyed FX snapshots that stamp tax-relevant EUR amounts at entry time (see §6).
+
+`AssetTransaction.source` still carries the legacy `degiro` / `binance` / `cobas` provenance on rows ingested before the importers were removed (2026-06); no import subsystem exists anymore. `AssetTransaction` also carries `valuationBasis` (`user` / `market-fx`) for the crypto-swap exception in §6.
+
+**Derived & domain tables** (schema under `src/db/schema/`, kept in sync by tx-scoped recompute or cron, never hand-edited):
+- **Composition:** `asset_sector_weightings`, `asset_country_weightings` — per-asset sector/country snapshots (§6).
+- **Tax engine** (`src/server/tax/`): `tax_lots` (FIFO acquisition lots, gross cost + fees separated, deferred-loss carry), `tax_lot_consumptions` (sale→lot links), `tax_wash_sale_adjustments` (norma antiaplicación), `tax_year_snapshots` (sealed-year frozen reports), `tax_declared_baselines` (manually-entered prior M720/M721 filings).
+- **Objectives:** `objectives` — allocation targets per asset (`/objectives`).
+- **Advisor:** `advisor_conversations`, `advisor_messages` (persisted chat threads), `advisor_runs` (token/cost/model observability ledger).
 
 ### UnifiedTransactionRow (view type)
 Merged timeline item across `AssetTransaction` and `AccountCashMovement`. Shared by the `/transactions` list and the account detail ledger.
@@ -201,21 +220,24 @@ Row actions: edit, deactivate.
 
 Unified timeline of all `AssetTransaction` + `AccountCashMovement`, newest first. Filters: account, date range, type. Pagination: cursor-based, 50 rows per page.
 
-Create (modal, v1 simplified): type selector (buy / sell / dividend / fee / deposit / withdrawal); account; asset (required for buy/sell/dividend/fee); traded/occurred at (date + time); quantity + unit price (trades) or amount (cash movements); currency + FX rate (auto-filled from latest price history if EUR target, editable); fees (optional); notes (optional). On save: recomputes `asset_positions.quantity` and `averageCost`; updates `account.currentCashBalanceEur`; writes audit event.
+Create (modal): type selector (buy / sell / dividend / fee / deposit / withdrawal); account; asset (required for buy/sell/dividend/fee); traded/occurred at (date + time); quantity + unit price (trades) or amount (cash movements); currency + FX rate (auto-filled from latest price history if EUR target, editable); fees (optional); notes (optional). On save: recomputes `asset_positions.quantity` and `averageCost`; updates `account.currentCashBalanceEur`; replays FIFO tax lots; writes audit event. **Crypto/asset swaps** (`createSwap`, permutas) record a matched sell+buy pair on one date with zero net cash impact, both legs EUR-valued and linked via `linkedTransactionId`.
 
 Delete: confirm modal → reverses position and cash balance changes → writes audit event.
 
 Import CSV: **removed 2026-06** (manual entry is the only registration path; see git history for the DEGIRO/Binance/Cobas importers). The dedup discipline survives: every inserted row carries a `rowFingerprint`.
 
-### 5.5 Taxes
+### 5.5 Taxes (foral — Bizkaia)
 
-Year selector (default: current year). Summary cards: realized capital gains, dividends received (gross / net / withholding), total taxable income.
+`/taxes` redirects to the latest year; `/taxes/[year]` is the year-end report. The engine is **Bizkaia/foral**, not estatal, and separates two layers:
 
-Realized gains: cost-basis tracking per asset using FIFO. Computed from completed buy→sell chains within the year.
+- **Declaración** (`src/server/tax/report.ts`) — raw, untransformed FIFO detail, one row per (sale, consumed lot) pair, ready to transcribe into Rentanet. Carries a `recompra` flag where the wash-sale rule disallows a loss.
+- **Previsión** (`src/server/tax/prevision.ts`) — an *estimate* of the foral outcome after applying the **coeficientes de actualización** (`coeficientes.ts`, annual DF tables that uplift acquisition cost, retained in Bizkaia for all asset classes). Explicitly non-binding.
 
-Dividends: sum of `dividendGross`, `dividendNet`, `withholdingTax` across all accounts.
+Engine details: FIFO lots in `tax_lots`/`tax_lot_consumptions` store cost as lot totals (gross + fees separate, never pre-rounded per unit; see also the fees-always-EUR rule). **Norma antiaplicación** (wash sale, `washSale.ts`) defers a disallowed loss into the acquiring lot's basis (2-month window listed/crypto, 12-month unlisted). The **cuota** (`cuota.ts`) integrates two watertight compartments (ganancias patrimoniales / RCM) with no cross-offset, and applies the **€1.500 dividend exemption**. Year **sealing** (`seals.ts` → `tax_year_snapshots`) freezes the full report + M720/M721 blocks + interest rate as JSON; a drift banner appears if live numbers diverge after sealing.
 
-Export: yearly tax report PDF.
+**M720/M721** informational models: `tax_declared_baselines` records prior filings made outside the app; status (`ok` / `new` / `delta_20k` / `full_exit`) is computed against the €50k first-declaration and €20k re-declaration thresholds at the joint category level. Missing year-end valuations surface as `UNVALUED`, never silent €0.
+
+Exports: `tax/casillas` (pipe-CSV of form boxes), `tax/detail` (Declaración + raw sales CSV), `tax/m720-diff` (JSON/CSV of current vs. declared blocks), `tax/pdf` (full printable report).
 
 ### 5.6 Audit
 
@@ -224,6 +246,26 @@ Chronological list of mutations across accounts, assets, and transactions. Each 
 ### 5.7 Health
 
 `GET /health` → `{ status: "ok", version, dbPath, prices: { lastSync } }`.
+
+### 5.8 Statement (`/statement`)
+
+The full visual portfolio statement (force-dynamic, always recomputed). Sections: value chart with range selector; **reparto por tipo de activo** (donut); **composición por regiones** geográficas (donut); **riesgo** (max drawdown + annualised volatility from the 100-anchored performance index, `src/lib/risk.ts`); **composición por objetivos** (1/3, donut coloured per objective) alongside **composición por sectores** (2/3); value by account; P&L by type; **costes** — accumulated commissions + custody fees + forward-looking TER drag (`src/server/costs.ts`); holdings grouped by type; accounts table. Exports PDF / XLSX / CSV.
+
+### 5.9 Objectives (`/objectives`)
+
+Allocation plan tied to **assets** (so the same exposure across brokers aggregates into one bucket). Each objective has a name, `targetPct`, sort order, theme colour, notes. The page shows current weight vs. target, drift (% and €), a draggable target ring, an unassigned («Sin objetivo») bucket, a contribution planner, and an asset→objective assignment table. Non-discretionary holdings (e.g. a fixed-contribution EPSV) can be **excluded** from the plan via that table (`excludeFromObjectives`) — they then count toward neither a bucket nor the valued total. The objectives are also surfaced as the composition-by-objective donut on `/statement`.
+
+### 5.10 Simulator (`/simulador`)
+
+Deterministic FIRE compound-interest projection (`src/lib/simulator.ts`, side-effect-free). Inputs: initial capital (prefilled from current net worth), monthly contribution + growth, expected return, horizon, inflation, scenario spreads. Outputs three scenarios (pesimista/base/optimista) with year-by-year nominal/real value, the **snowball year** (interest ≥ contribution), reverse solvers (required contribution / years to a target), and a **FIRE block** (4 %-rule number and when it's reached in real terms). Tax is injected as a callback so the lib stays server-free.
+
+### 5.11 Advisor (`/asesor`) + Telegram
+
+AI financial advisor on the **Claude Agent SDK**, billed to the Max subscription via `CLAUDE_CODE_OAUTH_TOKEN` (refuses to run if `ANTHROPIC_API_KEY` is set — it would bypass the credit). Interactive chat (`/api/advisor/chat`, streaming Opus) reasons over a live portfolio snapshot + the investor profile + the market digest; conversations persist as tabs (`advisor_conversations`/`advisor_messages`) and the assistant may propose profile-memory edits (confirm-gated). Three crons maintain the knowledge base: **advisor-scan** (hourly Sonnet + WebSearch news scan → digest; 09:00 slot sends a Telegram morning brief), **advisor-curate** (weekly digest prune), **advisor-chat-compact** (weekly transcript summarisation). Every run is metered in `advisor_runs` (tokens/cost/model). A standalone launchd daemon (`scripts/tg-bot.ts`, `com.finances.tg-bot`) long-polls Telegram for two commands — **`/net`** (portfolio KPIs) and **`/ask`** (one-shot advisor) — restricted to `TELEGRAM_CHAT_ID`.
+
+### 5.12 Settings (`/settings`)
+
+Read-only runtime card (app name, base currency EUR, `DB_PATH`, Node version) plus the **investor-profile editor** — free-form facts (risk tolerance, horizon, constraints, ≤4 KB) persisted to disk with rotating backups and a changelog, injected into every advisor prompt.
 
 ---
 
@@ -243,6 +285,13 @@ Inline scheduled route, not a separate worker.
 - Retries with delay on rate-limit errors.
 - FX ingestion: pulls `EURUSD=X` (and any other needed pairs) into `price_history` with `source='yahoo_fx'`.
 - Asset valuations: after each sync, recomputes `asset_valuations` for active assets for the new day.
+- Composition snapshots: the same cron also refreshes the sector and geographic breakdowns (see below). Both are freshness-gated, so most daily runs skip every asset.
+
+### Composition data (sectors & geography)
+Slow-moving holdings breakdowns, snapshotted per asset (no history), surfaced as the composition donuts on `/statement`. Never call these sources from a component or action — go through `src/lib/pricing/`, stubbed in tests.
+
+- **Sectors** — Yahoo `topHoldings.sectorWeightings` (ETFs/funds) or `assetProfile.sectorKey` (single stocks), via `src/lib/pricing/yahoo.ts`. Stored in `asset_sector_weightings` by `src/lib/sector-sync.ts`; refreshed every **7 days**. Read helper `src/server/sectors.ts`. Crypto and commodity ETPs (`subtype='commodity'`) get their own buckets; uncovered value → «Sin clasificar».
+- **Geography** — JustETF profile page by ISIN (`src/lib/pricing/justetf.ts`). The static page lists only the top countries + an aggregated «Other»; the full breakdown lives behind a Wicket «Show more» AJAX callback, so the client does GET (for the session cookie + page-version URL) → POST `loadMoreCountries`, then parses the expanded table (falls back to the truncated list on failure). Stored **per country** in `asset_country_weightings` by `src/lib/country-sync.ts` (ETFs/funds with an ISIN only); refreshed every **30 days** (JustETF publishes a monthly snapshot). The read helper `src/server/countries.ts` folds countries into **regions/continents** via `src/lib/countries.ts` (`countryRegion`). Geography-only: crypto, gold, individual stocks, a fund's uncovered sleeve, and assets without an ISIN are omitted from the chart, not bucketed; slice weights are share of the classified total so the donut sums to 100%. The residual «Otros» is JustETF's own un-itemised tail. Force a refresh with `DELETE FROM asset_country_weightings` + re-trigger the sync.
 
 ### USD → EUR conversion
 Market FX (`EURUSD=X` from `price_history`) first. Fallback to `fxRateToEur` stored on the originating transaction. Last resort: `1.0` with a warning badge on the row. **This last-resort applies to display valuations only — never to tax data.** Tax-relevant EUR amounts are stamped at entry time via `fx_rates` (precedence in `src/lib/fx.ts`: explicit user/broker rate → exact-date rate → stale-latest rate, flagged via `fxSource`), and entry is rejected when no rate exists at all.
@@ -268,7 +317,7 @@ Drizzle schema under `src/db/schema/*.ts`, one file per domain aggregate (accoun
 
 All data access runs through Server Components + Server Actions. There is no HTTP API layer between the UI and the DB — the old `lib/api.ts` wrapper from the monorepo is replaced by direct Drizzle calls in `src/server/`.
 
-Read helpers: `src/server/accounts.ts`, `assets.ts`, `transactions.ts`, `overview.ts`, `positions.ts`, `savings.ts`, `statement.ts`, `audit.ts`, plus the tax engine under `src/server/tax/`. The same layer hosts the tx-scoped derived-state recompute engine (`recompute.ts`, `rebuild.ts`, `valuations.ts`, `tax/lots.ts`) — write functions callable only inside an action's transaction.
+Read helpers: `src/server/accounts.ts`, `assets.ts`, `transactions.ts`, `overview.ts`, `positions.ts`, `savings.ts`, `statement.ts`, `sectors.ts`, `countries.ts`, `costs.ts`, `audit.ts`, plus the tax engine under `src/server/tax/`. The same layer hosts the tx-scoped derived-state recompute engine (`recompute.ts`, `rebuild.ts`, `valuations.ts`, `tax/lots.ts`) — write functions callable only inside an action's transaction.
 
 Mutations: Server Actions in `src/actions/*.ts`, one file per aggregate.
 
@@ -288,16 +337,23 @@ finances/
 │   │   │   └── [accountId]/page.tsx
 │   │   ├── assets/page.tsx
 │   │   ├── transactions/page.tsx
-│   │   ├── taxes/page.tsx
+│   │   ├── statement/page.tsx
+│   │   ├── objectives/page.tsx
+│   │   ├── simulador/page.tsx
+│   │   ├── asesor/page.tsx
+│   │   ├── settings/page.tsx
+│   │   ├── taxes/page.tsx              # redirect → latest year
+│   │   ├── taxes/[year]/page.tsx
 │   │   ├── audit/page.tsx
 │   │   ├── health/route.ts
 │   │   └── api/
-│   │       ├── cron/sync-prices/route.ts
-│   │       └── exports/                # PDF endpoints
+│   │       ├── cron/{sync-prices,backfill-prices,advisor-scan,advisor-curate,advisor-chat-compact}/route.ts
+│   │       ├── advisor/chat/route.ts
+│   │       └── exports/                # statement + tax (csv/json/pdf) endpoints
 │   ├── components/
 │   │   ├── ui/                         # Button, Card, Modal, DataTable, KPICard, charts/*
 │   │   ├── layout/                     # LayoutShell, TopNav, SideNav, Providers
-│   │   └── features/                   # accounts/, assets/, transactions/, overview/, taxes/, audit/
+│   │   └── features/                   # accounts/, assets/, transactions/, overview/, statement/, taxes/, audit/
 │   ├── server/                         # Drizzle read helpers + tx-scoped recompute (rebuild.ts)
 │   ├── actions/                        # Server Actions (mutations)
 │   ├── db/
@@ -310,7 +366,16 @@ finances/
 │   │   ├── money.ts                    # roundEur / round — the only sanctioned rounding
 │   │   ├── pagination.ts               # cursor helpers
 │   │   ├── fx.ts                       # FX resolution
-│   │   ├── pricing/                    # Yahoo / CoinGecko client wrappers
+│   │   ├── pricing/                    # Yahoo / CoinGecko / JustETF client wrappers
+│   │   ├── sectors.ts                  # sector taxonomy + labels (client-safe)
+│   │   ├── countries.ts                # country→region map + labels (client-safe)
+│   │   ├── sector-sync.ts              # Yahoo sector snapshot refresh (cron)
+│   │   ├── country-sync.ts             # JustETF geography snapshot refresh (cron)
+│   │   ├── objective-colors.ts         # objective palette resolution (client-safe)
+│   │   ├── simulator.ts                # deterministic FIRE projection (client-safe)
+│   │   ├── risk.ts                     # drawdown + volatility
+│   │   ├── benchmarks.ts / benchmark-sync.ts  # MSCI World / S&P 500 reference series
+│   │   ├── advisor/                    # Claude Agent SDK client, scan/curate, memory, telegram
 │   │   ├── exports/                    # XLSX/CSV builders
 │   │   └── pdf/                        # statement-report.ts, account-statement.ts, tax-report.ts
 │   └── types/                          # shared TS types (ported from @second-brain/types)
@@ -332,10 +397,12 @@ finances/
 ## 9. Environment Variables
 
 ```
+DATABASE_URL=data/finances.db            # primary; DB_PATH is a legacy alias
 DB_PATH=./data/finances.db
 CRON_SECRET=<random>
 YAHOO_USER_AGENT=<optional override>
 COINGECKO_API_KEY=<optional, enables crypto price sync>
+NEXT_PUBLIC_APP_NAME=Patrimonio          # top-nav brand
 PORT=3200
 
 # AI advisor (asesor). Uses the Claude Agent SDK via the Max subscription token,
@@ -358,16 +425,16 @@ No `NEXT_PUBLIC_API_URL` — data is fetched server-side via Drizzle, not HTTP.
 
 ## 10. Testing Surface
 
-Vitest unit tests cover:
+Vitest unit + in-process e2e tests cover:
 
-- Money formatting and FX resolution (`src/lib/format`, `src/lib/fx`).
+- Money formatting, rounding, and FX resolution (`src/lib/format`, `src/lib/money`, `src/lib/fx`).
 - Pagination cursor helpers (`src/lib/pagination`).
-- Account slug generation.
-- CSV parsers per format, with fixture files in `tests/fixtures/`.
-- Realized-gains FIFO computation (`src/server/taxes`).
-- Position recomputation after a trade is inserted / deleted.
+- Position + cash recomputation after a trade is inserted / deleted (`src/lib/price-sync`, e2e lifecycle).
+- The foral tax engine: FIFO lots, wash-sale (antiaplicación), cuota/compartimentos, Previsión coefficients, M720 aggregation, year sealing, market-independence invariant (`src/server/tax/__tests__/`).
+- Composition: sector & country sync + read layers, and the JustETF HTML parser against a captured fixture (`src/lib/__tests__/{sector,country}-sync`, `src/server/__tests__/{sectors,countries}`, `src/lib/pricing/justetf`).
+- FIRE simulator math, XIRR, risk (drawdown/volatility), benchmarks, costs, objectives allocation, advisor conversations/memory/telegram.
 
-No E2E layer in v1. Manual verification in browser for UI flows. Yahoo client is stubbed in tests — no real network calls.
+No dedicated browser E2E in v1 (the e2e suite drives the DB + actions in-process). Manual verification in browser for UI flows. The Yahoo, CoinGecko and JustETF clients are all stubbed in tests — no real network calls.
 
 ---
 
@@ -377,8 +444,10 @@ No E2E layer in v1. Manual verification in browser for UI flows. Yahoo client is
 - Multi-currency base. EUR is fixed.
 - Real-time price streaming. Daily sync only.
 - Mobile-specific layouts. Desktop-first; must not break at tablet width, but no dedicated mobile UX.
-- Integration tests against the real Yahoo API.
-- Benchmark overlay, import history screen, dry-run import, price-freshness badge — flagged as future ideas in the source repo; not v1.
+- Integration tests against the real Yahoo / CoinGecko / JustETF endpoints.
+- CSV / broker-statement import. The DEGIRO/Binance/Cobas importers were removed 2026-06; manual entry is the only registration path.
+
+> Several v1 "future ideas" have since shipped and are now documented above: benchmark overlay (§5.8/§1), price-freshness indicator (§6), the AI advisor (§5.11), the FIRE simulator (§5.10), allocation objectives (§5.9), and the sector/geography composition donuts (§6).
 
 ---
 
@@ -387,7 +456,7 @@ No E2E layer in v1. Manual verification in browser for UI flows. Yahoo client is
 v1 is done when:
 
 1. Every route in §3 renders with real data from SQLite.
-2. All CRUD flows in §5 work end-to-end (create, delete, import).
+2. All CRUD flows in §5 work end-to-end (create, delete; manual entry only — no import).
 3. The Yahoo sync route successfully populates `price_history` and `asset_valuations` for at least one asset with a `providerSymbol`.
 4. Overview dashboard shows a non-empty performance chart for a seeded account with at least one buy transaction.
 5. `pnpm build` and `pnpm test` both pass.

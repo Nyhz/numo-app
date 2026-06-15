@@ -1,9 +1,16 @@
 import type { Asset } from "../../db/schema";
 import * as yahoo from "./yahoo";
 import * as coingecko from "./coingecko";
+import * as justetf from "./justetf";
 import type { HistoricalBar, Quote } from "./types";
 
-export type { CoinCandidate, HistoricalBar, Quote, SectorWeight } from "./types";
+export type {
+  CoinCandidate,
+  CountryWeight,
+  HistoricalBar,
+  Quote,
+  SectorWeight,
+} from "./types";
 
 export type PricingProviderName = "yahoo" | "coingecko";
 
@@ -38,5 +45,6 @@ export const fetchQuote = yahoo.fetchQuote;
 export const fetchHistory = yahoo.fetchHistory;
 export const fetchSectorWeightings = yahoo.fetchSectorWeightings;
 export const fetchAssetSector = yahoo.fetchAssetSector;
+export const fetchCountryWeightings = justetf.fetchCountryWeightings;
 
 export { searchCoins } from "./coingecko";

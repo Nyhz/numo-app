@@ -1,0 +1,1 @@
+ALTER TABLE `assets` ADD `exclude_from_objectives` integer DEFAULT false NOT NULL;

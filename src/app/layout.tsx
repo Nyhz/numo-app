@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "@/src/components/layout/AppShell";
 import "./globals.css";
@@ -14,8 +14,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Finances Panel",
-  description: "EUR-first personal finances dashboard",
+  // Per-page titles render as "Extracto · Patrimonio", etc.
+  title: {
+    default: "Patrimonio — cuartel financiero",
+    template: "%s · Patrimonio",
+  },
+  description:
+    "Panel de inversión personal en euros: patrimonio, cartera, objetivos de asignación, fiscalidad foral y asesor financiero. Privado, en local.",
+  applicationName: "Patrimonio",
+  authors: [{ name: "Commander" }],
+  keywords: ["patrimonio", "inversión", "cartera", "ETF", "FIRE", "fiscalidad", "EUR"],
+  // Single-user LAN app — keep it out of search indexes.
+  robots: { index: false, follow: false },
+};
+
+export const viewport: Viewport = {
+  colorScheme: "dark light",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+  ],
 };
 
 // Applies theme + sensitive state synchronously before paint to avoid FOUC.

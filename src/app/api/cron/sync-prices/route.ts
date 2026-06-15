@@ -5,12 +5,14 @@ import {
   fetchHistory,
   fetchSectorWeightings,
   fetchAssetSector,
+  fetchCountryWeightings,
   yahooProvider,
   coingeckoProvider,
 } from "../../../../lib/pricing";
 import { withRetry } from "../../../../lib/pricing/_net";
 import { syncPrices } from "../../../../lib/price-sync";
 import { syncSectorWeightings } from "../../../../lib/sector-sync";
+import { syncCountryWeightings } from "../../../../lib/country-sync";
 
 // Audit R3: single-process in-flight guard. Two overlapping cron hits would
 // interleave at await points between existence checks and writes; the second
@@ -52,7 +54,17 @@ async function handle(req: Request): Promise<Response> {
       },
       Date.now(),
     );
-    return Response.json({ ok: true, summary, benchmarks, sectors });
+    // Geographic composition for ETFs/funds (JustETF, keyed by ISIN).
+    // Monthly-fresh (see country-sync), so most daily runs skip every asset.
+    const countries = await syncCountryWeightings(
+      db,
+      {
+        fetchCountryWeightings: (isin) =>
+          withRetry(() => fetchCountryWeightings(isin)),
+      },
+      Date.now(),
+    );
+    return Response.json({ ok: true, summary, benchmarks, sectors, countries });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return Response.json({ ok: false, error: message }, { status: 500 });

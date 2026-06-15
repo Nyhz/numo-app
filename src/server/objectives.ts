@@ -30,6 +30,8 @@ export type AssignableAsset = {
   assetType: string;
   valueEur: number | null;
   objectiveId: string | null;
+  /** Left out of the objectives view entirely (non-discretionary holding). */
+  excludedFromObjectives: boolean;
 };
 
 /** Open positions grouped by their asset's objective. Aggregation is by
@@ -48,6 +50,9 @@ export async function getObjectivesAllocation(
   let totalValuedEur = 0;
   for (const p of positions) {
     if (p.valuationEur == null) continue;
+    // Non-discretionary holdings (e.g. a fixed-contribution EPSV) are left out
+    // of the plan entirely — not even «Sin objetivo» — and off the total.
+    if (p.asset.excludeFromObjectives) continue;
     totalValuedEur += p.valuationEur;
     const key = p.asset.objectiveId ?? null;
     const list = byObjective.get(key) ?? [];
@@ -108,6 +113,7 @@ export async function listAssignableAssets(db: DB = defaultDb): Promise<Assignab
       assetType: p.asset.assetType,
       valueEur: p.valuationEur,
       objectiveId: p.asset.objectiveId ?? null,
+      excludedFromObjectives: p.asset.excludeFromObjectives ?? false,
     }))
     .sort((a, b) => (b.valueEur ?? 0) - (a.valueEur ?? 0));
 }

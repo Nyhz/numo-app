@@ -15,6 +15,7 @@ import {
   createObjective,
   deleteObjective,
   reorderObjectives,
+  setAssetExcludeFromObjectives,
   setAssetObjective,
   setObjectiveTargets,
 } from "../../actions/objectives";
@@ -74,6 +75,35 @@ describe("objectives — allocation across brokers", () => {
     const unassigned = allocation.buckets.find((b) => b.objective == null)!;
     expect(unassigned.valueEur).toBe(2000);
     expect(allocation.unassignedEur).toBe(2000);
+  });
+
+  it("leaves excluded assets out of the plan and its valued total", async () => {
+    const db = makeDb();
+    seedAsset(db, "ast_world", "All-World", 8000);
+    seedAsset(db, "ast_epsv", "EPSV", 2000);
+    const world = await createObjective({ name: "World", targetPct: 100 }, db);
+    if (!world.ok) throw new Error("seed failed");
+    await setAssetObjective({ assetId: "ast_world", objectiveId: world.data.id }, db);
+
+    // Unassigned EPSV first shows up as «Sin objetivo» and counts in the total.
+    let alloc = await getObjectivesAllocation(db);
+    expect(alloc.totalValuedEur).toBe(10000);
+    expect(alloc.unassignedEur).toBe(2000);
+
+    // Excluding it drops it from the plan AND the total.
+    const ex = await setAssetExcludeFromObjectives({ assetId: "ast_epsv", excluded: true }, db);
+    expect(ex.ok).toBe(true);
+    alloc = await getObjectivesAllocation(db);
+    expect(alloc.totalValuedEur).toBe(8000);
+    expect(alloc.unassignedEur).toBe(0);
+    expect(alloc.buckets.some((b) => b.objective == null)).toBe(false);
+    const bucket = alloc.buckets.find((b) => b.objective?.id === world.data.id)!;
+    expect(bucket.weightPct).toBeCloseTo(100, 6); // 100 % of discretionary capital
+
+    // Re-including restores it to the total.
+    await setAssetExcludeFromObjectives({ assetId: "ast_epsv", excluded: false }, db);
+    alloc = await getObjectivesAllocation(db);
+    expect(alloc.totalValuedEur).toBe(10000);
   });
 
   it("rejects duplicate names and out-of-range targets", async () => {

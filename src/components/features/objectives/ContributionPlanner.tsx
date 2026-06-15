@@ -18,7 +18,7 @@ export function ContributionPlanner({
   buckets: ObjectiveBucket[]; // tagged buckets, display order
   totalValuedEur: number;
 }) {
-  const [amount, setAmount] = React.useState("500");
+  const [amount, setAmount] = React.useState("1200");
   const parsed = Number(amount.replace(",", "."));
   const valid = Number.isFinite(parsed) && parsed > 0;
 

@@ -37,6 +37,11 @@ const assignSchema = z.object({
   objectiveId: z.string().min(1).nullable(),
 });
 
+const excludeSchema = z.object({
+  assetId: z.string().min(1),
+  excluded: z.boolean(),
+});
+
 const reorderSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(50),
 });
@@ -299,6 +304,46 @@ export async function setObjectiveTargets(
     const message = err instanceof Error ? err.message : "Unknown DB error";
     if (message === "objective not found") {
       return { ok: false, error: { code: "not_found", message: "objetivo no encontrado" } };
+    }
+    return { ok: false, error: { code: "db", message } };
+  }
+}
+
+/** Toggle whether an asset is tracked by the allocation objectives at all.
+ *  Excluded assets vanish from the plan (not even «Sin objetivo») and from its
+ *  valued total — for non-discretionary holdings like a fixed EPSV. */
+export async function setAssetExcludeFromObjectives(
+  input: unknown,
+  db: DB = defaultDb,
+): Promise<ActionResult<{ assetId: string; excluded: boolean }>> {
+  const parsed = excludeSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: { code: "validation", message: "Datos no válidos" } };
+  }
+  const { assetId, excluded } = parsed.data;
+  try {
+    db.transaction((tx) => {
+      const asset = tx.select().from(assets).where(eq(assets.id, assetId)).get();
+      if (!asset) throw new Error("asset not found");
+      tx.update(assets)
+        .set({ excludeFromObjectives: excluded, updatedAt: Date.now() })
+        .where(eq(assets.id, assetId))
+        .run();
+      audit(
+        tx,
+        assetId,
+        "update",
+        { excludeFromObjectives: asset.excludeFromObjectives ?? false },
+        { excludeFromObjectives: excluded },
+        `Activo «${asset.name}» → ${excluded ? "excluido de" : "incluido en"} objetivos`,
+      );
+    });
+    revalidateObjectives();
+    return { ok: true, data: { assetId, excluded } };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown DB error";
+    if (message === "asset not found") {
+      return { ok: false, error: { code: "not_found", message } };
     }
     return { ok: false, error: { code: "db", message } };
   }

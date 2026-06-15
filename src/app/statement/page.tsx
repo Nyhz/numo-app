@@ -10,12 +10,10 @@ import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { ChartCardSkeleton } from "@/src/components/features/overview/skeletons";
 import { AllocationDonut } from "@/src/components/features/statement/AllocationDonut";
 import { CostsCard } from "@/src/components/features/statement/CostsCard";
-import {
-  CurrencyExposure,
-  type CurrencySlice,
-} from "@/src/components/features/statement/CurrencyExposure";
 import { DrawdownChart } from "@/src/components/features/statement/DrawdownChart";
 import { SectorAllocation } from "@/src/components/features/statement/SectorAllocation";
+import { RegionAllocation } from "@/src/components/features/statement/RegionAllocation";
+import { ObjectiveAllocation } from "@/src/components/features/statement/ObjectiveAllocation";
 import { StatementExportMenu } from "@/src/components/features/statement/StatementExportMenu";
 import { StatementValueChart } from "@/src/components/features/statement/StatementValueChart";
 import { cn } from "@/src/lib/cn";
@@ -33,7 +31,10 @@ import {
   type StatementReport,
 } from "@/src/server/statement";
 import { getSectorAllocation } from "@/src/server/sectors";
+import { getCountryAllocation } from "@/src/server/countries";
+import { getObjectivesAllocation } from "@/src/server/objectives";
 import { getCostsSummary } from "@/src/server/costs";
+import { resolveObjectiveColor } from "@/src/lib/objective-colors";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -245,12 +246,31 @@ export default async function StatementPage({
 }) {
   const params = await searchParams;
   const range = parseRange(params.range);
-  const [report, sectorAllocation, costs] = await Promise.all([
-    getStatementReport(),
-    getSectorAllocation(),
-    getCostsSummary(),
-  ]);
+  const [report, sectorAllocation, countryAllocation, objectivesAllocation, costs] =
+    await Promise.all([
+      getStatementReport(),
+      getSectorAllocation(),
+      getCountryAllocation(),
+      getObjectivesAllocation(),
+      getCostsSummary(),
+    ]);
   const hasPositions = report.totals.positionsCount > 0;
+
+  // Portfolio split by allocation objective (live: reflects new objectives,
+  // reassigned assets, and target edits on the next render). The unassigned
+  // bucket (objective === null) renders in a neutral muted tone.
+  const objectiveSlices = objectivesAllocation.buckets
+    .map((bucket, i) => ({
+      id: bucket.objective?.id ?? "unassigned",
+      label: bucket.objective?.name ?? "Sin objetivo",
+      valueEur: bucket.valueEur,
+      weight: bucket.weightPct / 100,
+      color: bucket.objective
+        ? resolveObjectiveColor(bucket.objective.color, i)
+        : "hsl(var(--muted-foreground))",
+    }))
+    .filter((slice) => slice.valueEur > 0)
+    .sort((a, b) => b.valueEur - a.valueEur);
 
   const slices = report.groups
     .filter((g) => g.marketValueEur > 0)
@@ -259,23 +279,6 @@ export default async function StatementPage({
       valueEur: g.marketValueEur,
       weight: g.weight,
     }));
-  // Underlying-currency exposure: a USD-quoted asset is dollar risk even
-  // though the panel values everything in EUR.
-  const byCurrency = new Map<string, number>();
-  let valuedTotal = 0;
-  for (const line of report.groups.flatMap((g) => g.lines)) {
-    if (line.marketValueEur == null) continue;
-    byCurrency.set(line.currency, (byCurrency.get(line.currency) ?? 0) + line.marketValueEur);
-    valuedTotal += line.marketValueEur;
-  }
-  const currencySlices: CurrencySlice[] = [...byCurrency.entries()]
-    .map(([currency, valueEur]) => ({
-      currency,
-      valueEur,
-      weight: valuedTotal > 0 ? valueEur / valuedTotal : 0,
-    }))
-    .sort((a, b) => b.valueEur - a.valueEur);
-
   return (
     <div className="flex flex-col gap-6 p-8">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -314,15 +317,27 @@ export default async function StatementPage({
               />
             )}
           </Card>
-          <Card title="Exposición por divisa">
-            {currencySlices.length === 0 ? (
+          <Card
+            title="Composición por regiones"
+            action={
+              countryAllocation.asOf != null ? (
+                <span className="text-xs text-muted-foreground">
+                  Datos a {formatDateTime(countryAllocation.asOf)}
+                </span>
+              ) : undefined
+            }
+          >
+            {countryAllocation.slices.length === 0 ? (
               <StatesBlock
                 mode="empty"
-                title="Sin posiciones valoradas"
-                description="La exposición aparecerá cuando las posiciones tengan precio sincronizado."
+                title="Sin datos geográficos"
+                description="La composición por regiones aparecerá tras la próxima sincronización de tus ETFs y fondos."
               />
             ) : (
-              <CurrencyExposure slices={currencySlices} />
+              <RegionAllocation
+                slices={countryAllocation.slices}
+                classifiedEur={countryAllocation.classifiedEur}
+              />
             )}
           </Card>
           <Card title="Riesgo — caída desde máximos">
@@ -343,29 +358,46 @@ export default async function StatementPage({
       )}
 
       {hasPositions && (
-        <Card
-          title="Composición por sectores"
-          action={
-            sectorAllocation.asOf != null ? (
-              <span className="text-xs text-muted-foreground">
-                Datos a {formatDateTime(sectorAllocation.asOf)}
-              </span>
-            ) : undefined
-          }
-        >
-          {sectorAllocation.slices.length === 0 ? (
-            <StatesBlock
-              mode="empty"
-              title="Sin datos sectoriales"
-              description="La composición por sectores aparecerá tras la próxima sincronización de precios de tus ETFs y fondos."
-            />
-          ) : (
-            <SectorAllocation
-              slices={sectorAllocation.slices}
-              classifiedEur={sectorAllocation.classifiedEur}
-            />
-          )}
-        </Card>
+        <section className="grid gap-6 lg:grid-cols-3">
+          <Card title="Composición por objetivos" className="lg:col-span-1">
+            {objectiveSlices.length === 0 ? (
+              <StatesBlock
+                mode="empty"
+                title="Sin objetivos"
+                description="Asigna tus activos a objetivos en /objectives para ver el reparto aquí."
+              />
+            ) : (
+              <ObjectiveAllocation
+                slices={objectiveSlices}
+                totalEur={objectivesAllocation.totalValuedEur}
+              />
+            )}
+          </Card>
+          <Card
+            title="Composición por sectores"
+            className="lg:col-span-2"
+            action={
+              sectorAllocation.asOf != null ? (
+                <span className="text-xs text-muted-foreground">
+                  Datos a {formatDateTime(sectorAllocation.asOf)}
+                </span>
+              ) : undefined
+            }
+          >
+            {sectorAllocation.slices.length === 0 ? (
+              <StatesBlock
+                mode="empty"
+                title="Sin datos sectoriales"
+                description="La composición por sectores aparecerá tras la próxima sincronización de precios de tus ETFs y fondos."
+              />
+            ) : (
+              <SectorAllocation
+                slices={sectorAllocation.slices}
+                classifiedEur={sectorAllocation.classifiedEur}
+              />
+            )}
+          </Card>
+        </section>
       )}
 
       <Card title="Costes — comisiones y TER">

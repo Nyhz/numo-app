@@ -6,7 +6,10 @@ import { Card } from "@/src/components/ui/Card";
 import { DataTable } from "@/src/components/ui/DataTable";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { StatesBlock } from "@/src/components/ui/StatesBlock";
-import { setAssetObjective } from "@/src/actions/objectives";
+import {
+  setAssetObjective,
+  setAssetExcludeFromObjectives,
+} from "@/src/actions/objectives";
 import { assetTypeLabel } from "@/src/components/ui/AssetTypeBadge";
 import { formatEur } from "@/src/lib/format";
 import type { Objective } from "@/src/db/schema";
@@ -23,10 +26,33 @@ export function AssetAssignmentTable({
   const [pendingAsset, setPendingAsset] = React.useState<string | null>(null);
   const [banner, setBanner] = React.useState<string | null>(null);
 
-  async function assign(assetId: string, objectiveId: string | null) {
-    setPendingAsset(assetId);
+  // Sentinel select value: "leave this asset out of the objectives plan".
+  const EXCLUDE = "__exclude__";
+
+  async function change(asset: AssignableAsset, value: string) {
+    setPendingAsset(asset.assetId);
     setBanner(null);
-    const result = await setAssetObjective({ assetId, objectiveId });
+    let result;
+    if (value === EXCLUDE) {
+      result = await setAssetExcludeFromObjectives({ assetId: asset.assetId, excluded: true });
+    } else {
+      // Re-including a previously excluded asset before (re)assigning it.
+      if (asset.excludedFromObjectives) {
+        const reinc = await setAssetExcludeFromObjectives({
+          assetId: asset.assetId,
+          excluded: false,
+        });
+        if (!reinc.ok) {
+          setPendingAsset(null);
+          setBanner(reinc.error.message);
+          return;
+        }
+      }
+      result = await setAssetObjective({
+        assetId: asset.assetId,
+        objectiveId: value === "" ? null : value,
+      });
+    }
     setPendingAsset(null);
     if (!result.ok) {
       setBanner(result.error.message);
@@ -87,8 +113,8 @@ export function AssetAssignmentTable({
               align: "right",
               cell: (a) => (
                 <select
-                  value={a.objectiveId ?? ""}
-                  onChange={(e) => assign(a.assetId, e.target.value === "" ? null : e.target.value)}
+                  value={a.excludedFromObjectives ? EXCLUDE : a.objectiveId ?? ""}
+                  onChange={(e) => change(a, e.target.value)}
                   disabled={pendingAsset === a.assetId}
                   aria-label={`Objetivo de ${a.name}`}
                   className="rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
@@ -99,6 +125,7 @@ export function AssetAssignmentTable({
                       {o.name}
                     </option>
                   ))}
+                  <option value={EXCLUDE}>Excluir de objetivos</option>
                 </select>
               ),
             },

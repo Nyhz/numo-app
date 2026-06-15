@@ -1,11 +1,11 @@
 ```
- ███████╗██╗███╗   ██╗ █████╗ ███╗   ██╗ ██████╗███████╗███████╗
- ██╔════╝██║████╗  ██║██╔══██╗████╗  ██║██╔════╝██╔════╝██╔════╝
- █████╗  ██║██╔██╗ ██║███████║██╔██╗ ██║██║     █████╗  ███████╗
- ██╔══╝  ██║██║╚██╗██║██╔══██║██║╚██╗██║██║     ██╔══╝  ╚════██║
- ██║     ██║██║ ╚████║██║  ██║██║ ╚████║╚██████╗███████╗███████║
- ╚═╝     ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝╚══════╝╚══════╝
-                   F I N A N C E S   P A N E L
+██████╗   █████╗  ████████╗ ██████╗  ██╗ ███╗   ███╗  ██████╗  ███╗   ██╗ ██╗  ██████╗
+██╔══██╗ ██╔══██╗ ╚══██╔══╝ ██╔══██╗ ██║ ████╗ ████║ ██╔═══██╗ ████╗  ██║ ██║ ██╔═══██╗
+██████╔╝ ███████║    ██║    ██████╔╝ ██║ ██╔████╔██║ ██║   ██║ ██╔██╗ ██║ ██║ ██║   ██║
+██╔═══╝  ██╔══██║    ██║    ██╔══██╗ ██║ ██║╚██╔╝██║ ██║   ██║ ██║╚██╗██║ ██║ ██║   ██║
+██║      ██║  ██║    ██║    ██║  ██║ ██║ ██║ ╚═╝ ██║ ╚██████╔╝ ██║ ╚████║ ██║ ╚██████╔╝
+╚═╝      ╚═╝  ╚═╝    ╚═╝    ╚═╝  ╚═╝ ╚═╝ ╚═╝     ╚═╝  ╚═════╝  ╚═╝  ╚═══╝ ╚═╝  ╚═════╝
+                        P A T R I M O N I O
 ```
 
 ![claude code](https://img.shields.io/badge/claude_code-required-blue?style=flat-square)
@@ -15,13 +15,13 @@
 ![eur](https://img.shields.io/badge/base-EUR-blue?style=flat-square)
 ![timezone](https://img.shields.io/badge/tz-Europe%2FMadrid-orange?style=flat-square)
 
-**Personal Finances Panel — Portfolio Tracker + CSV Imports + Daily Price Sync**
+**Patrimonio — Portfolio Tracker + Foral Tax Engine + AI Advisor**
 
 > *Un dashboard para tu patrimonio. Una SQLite a tu lado. Un cron cada noche.*
 
-A single-user portfolio tracker that lives on your machine. Import your broker CSVs (DEGIRO, Binance, Cobas), let Yahoo Finance quote your holdings every weekday at 23:00 Madrid, and watch range-aware P/L, per-asset sparklines, and portfolio evolution land in a dark-mode dashboard.
+A single-user portfolio tracker that lives on your machine. Register your trades by hand, let Yahoo Finance + CoinGecko quote your holdings every weekday at 23:00 Madrid, and watch range-aware P/L, per-asset sparklines, allocation objectives, sector/geography composition, a Bizkaia foral tax report, and an AI advisor land in a dark-mode dashboard.
 
-No cloud. No auth. No subscription. One SQLite file, one cron entry, a Yahoo Finance client, and Claude Code doing the talking.
+No cloud. No auth. No subscription. One SQLite file, one cron entry, market-data clients, and Claude Code doing the talking.
 
 ---
 
@@ -48,13 +48,11 @@ No cloud. No auth. No subscription. One SQLite file, one cron entry, a Yahoo Fin
 - **Manual price** — Set a manual NAV for illiquid assets; stored as a `price_source='manual'` row
 - **Deactivate** — Soft-hide stale assets; excluded from sync and valuations
 
-### Imports
+### Data entry
 
-- **DEGIRO** — Current "Transactions" export. Parses the two unnamed currency columns next to `Price` / `Local value`, uses the broker's `Exchange rate` as the trade-time FX snapshot, and treats `AutoFX Fee + Transaction and/or third party fees EUR` as already-EUR fees. Legacy simpler format also supported
-- **Cobas** — Current "operaciones.csv" export. Reads operation type from `Tipo` (not the `Operacion` id column), fund name from `Producto`, amount from `Importe neto`. Single-digit `d/m/yyyy` dates are normalised
-- **Binance** — Spot trade + savings interest CSVs
-- **Preview → confirm** — Preview diffs each row against the DB by `rowFingerprint`; confirm inserts inside a single `db.transaction`, recomputes positions, updates cash balance, writes an `audit_events` row
-- **Batch dedup** — Multiple rows of the same pending asset flag only the first as `needs_asset_creation`; the rest preview as `new`
+- **Manual only** — The DEGIRO/Binance/Cobas CSV importers were removed (2026-06). Trades and cash movements are entered through the `/transactions` modal (buy / sell / dividend / fee / swap / cash movement)
+- **Swaps** — `createSwap` records a matched sell+buy pair on one date with zero net cash impact (crypto↔crypto and cross-asset), both legs EUR-valued and linked
+- **Dedup discipline survives** — every inserted row still carries a `rowFingerprint`; `asset_transactions.source` keeps the legacy `degiro`/`binance`/`cobas` provenance on rows ingested before the importers were dropped
 
 ### Pricing
 
@@ -62,13 +60,38 @@ No cloud. No auth. No subscription. One SQLite file, one cron entry, a Yahoo Fin
 - **Cron route** — `/api/cron/sync-prices`, gated by `x-cron-secret`. Idempotent within a calendar day: `price_history.(symbol, priced_date_utc)` has a unique index and the route skips existing rows
 - **Historical backfill** — `scripts/backfill-history.ts` pulls daily bars for each asset from its first trade date, fills weekday holidays forward, and writes `price_history` + `fx_rates` + `asset_valuations`
 - **Rebuild** — `scripts/rebuild-valuations.ts` regenerates `asset_valuations` from `price_history` + `fx_rates` with the same fill-forward, without hitting Yahoo
+- **Composition snapshots** — the same cron also refreshes the `/statement` donuts: **sectors** from Yahoo `topHoldings`/`assetProfile` (7-day freshness), and **geography** from JustETF's profile page by ISIN (30-day freshness). The country breakdown is scraped in two steps — GET the page, then POST JustETF's Wicket "Show more" callback for the full list — stored per country and folded into regions/continents at read time. Geography is geography-only: crypto, gold, stocks and assets without an ISIN are omitted, not bucketed
 - **Precision** — Unit prices stored to 6 decimals so sub-euro tickers (AMP.MC, NXT.MC) don't round to `€0.19`. Market values rounded to the cent
 
-### Taxes
+### Taxes (foral — Bizkaia)
 
-- **Realized gains (FIFO)** — `/taxes` computes FIFO per-asset realized gains for a selected year, broken down by buy lot. Totals in EUR, based on trade-time `fxRateToEur` (broker-supplied when present, historical rate fallback)
-- **Dividends & interest** — Aggregated from `account_cash_movements` rows tagged `dividend` / `interest`, net of withholding when present
-- **PDF export** — `/api/exports/tax-report?year=YYYY` generates a printable statement via `jspdf`
+- **Declaración vs Previsión** — `/taxes/[year]` shows the raw FIFO lot-by-lot detail to transcribe into Rentanet (*Declaración*) alongside an estimate after the foral *coeficientes de actualización* (*Previsión*)
+- **FIFO lots + wash sale** — acquisition lots in `tax_lots`/`tax_lot_consumptions` (gross cost + fees separate); the *norma antiaplicación* defers disallowed losses into the acquiring lot's basis
+- **Cuota & dividends** — two watertight compartments with no cross-offset, plus the €1.500 dividend exemption
+- **M720 / M721** — informational-model status vs. manually-entered prior baselines (`tax_declared_baselines`), at the €50k / €20k thresholds
+- **Sealing** — freeze a year's full report as a snapshot; a drift banner flags any later divergence
+- **Exports** — `casillas` / `detail` CSV, `m720-diff` JSON/CSV, and a full PDF via `jspdf`
+
+### Statement (`/statement`)
+
+- **Composition donuts** — by asset type, by **geographic region** (JustETF), by **allocation objective** (1/3) alongside **equity sector** (2/3, Yahoo)
+- **Risk** — max drawdown + annualised volatility from the 100-anchored performance index
+- **Costs** — accumulated commissions + custody fees + forward-looking TER drag
+- **Exports** — PDF / XLSX / CSV
+
+### Objectives (`/objectives`)
+
+- **Allocation plan tied to assets** (so the same exposure across brokers aggregates into one bucket): target % vs. current weight, drift (% and €), draggable target ring, contribution planner, per-asset assignment table. Surfaced as the by-objective donut on `/statement`
+
+### FIRE Simulator (`/simulador`)
+
+- **Deterministic compound-interest projection** with pesimista/base/optimista scenarios, the *snowball year*, reverse solvers (required contribution / years to target), and a 4%-rule FIRE block. Prefilled from current net worth
+
+### AI Advisor (`/asesor`) + Telegram
+
+- **Claude Agent SDK** chat over a live portfolio snapshot + investor profile + market digest; persistent conversation tabs; billed to the Max subscription (`CLAUDE_CODE_OAUTH_TOKEN`)
+- **Scheduled crons** — hourly market scan (09:00 → Telegram morning brief), weekly digest curation, weekly chat compaction; every run metered in `advisor_runs`
+- **Telegram bot** — standalone launchd daemon answering `/net` (KPIs) and `/ask` (one-shot advisor), restricted to one chat id
 
 ### Audit Log
 
@@ -113,7 +136,9 @@ No cloud. No auth. No subscription. One SQLite file, one cron entry, a Yahoo Fin
 │                                                          │
 ├──────────────────────────────────────────────────────────┤
 │                External (read-only)                      │
-│   └── Yahoo Finance — quotes, historical bars, FX pairs  │
+│   ├── Yahoo Finance — quotes, historical bars, FX pairs  │
+│   ├── CoinGecko — crypto quotes (EUR-native)             │
+│   └── JustETF — fund geography by ISIN (composition)     │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -130,6 +155,7 @@ No cloud. No auth. No subscription. One SQLite file, one cron entry, a Yahoo Fin
 | Validation | Zod 4 | Every Server Action validates at the boundary |
 | Charts | Recharts 3 | Area / Line primitives with theme tokens |
 | Pricing | yahoo-finance2 3.14 | Quotes, chart bars, FX pairs (EURUSD=X) |
+| Composition | Yahoo (sectors) + JustETF (geography by ISIN) | `/statement` sector and region donuts |
 | PDF | jspdf | Account statement + tax report exports |
 | IDs | ULID | Lexicographically sortable, monotonic |
 | Testing | Vitest 4 | Unit + integration (in-memory SQLite) |
@@ -251,7 +277,8 @@ Mutations live in Server Actions under `src/actions/*` — no REST endpoints. Re
 | `src/actions/createAsset.ts` / `updateAsset.ts` / `deactivateAsset.ts` | Asset lifecycle |
 | `src/actions/createTransaction.ts` / `deleteTransaction.ts` | Manual trade entry, recomputes position + cash |
 | `src/actions/createCashMovement.ts` / `deleteCashMovement.ts` | Deposit / withdrawal / dividend / fee |
-| `src/actions/previewImport.ts` / `confirmImport.ts` | CSV import flow |
+| `src/actions/createSwap.ts` | Matched sell+buy swap (permuta), zero net cash |
+| `src/actions/objectives.ts` | Allocation-objective CRUD + asset assignment |
 | `src/actions/setManualPrice.ts` | Override valuation for an illiquid asset |
 
 All actions return `{ ok: true, data } | { ok: false, error }` — never throw across the boundary for expected failures. Input is Zod-validated at the entry point; Zod schemas live in sibling `<name>.schema.ts` files because Next 16's `"use server"` rule forbids non-async exports from action files.
@@ -372,7 +399,7 @@ CRON_SECRET=change-me
 YAHOO_USER_AGENT=
 
 # Display name shown in the UI shell (quote values with spaces)
-NEXT_PUBLIC_APP_NAME="Finances Panel"
+NEXT_PUBLIC_APP_NAME="Patrimonio"
 
 # Port Next.js binds to in dev/start
 PORT=3200
@@ -411,7 +438,7 @@ Weekend runs against Yahoo-tracked assets are harmless: the sync skips the inser
 
 ### Historical Backfill (one-shot)
 
-After your first CSV import, populate daily history from Yahoo for every active asset:
+After registering your first trades, populate daily history from Yahoo for every active asset:
 
 ```bash
 pnpm exec tsx scripts/backfill-history.ts
@@ -523,6 +550,6 @@ Before reporting a mission complete:
 ---
 
 <p align="center">
-  <sub>FINANCES PANEL — v0.1.0</sub><br>
+  <sub>PATRIMONIO — v0.1.0</sub><br>
   <sub>Europe/Madrid · EUR · Local-first · One user, one portfolio.</sub>
 </p>

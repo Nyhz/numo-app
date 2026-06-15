@@ -12,6 +12,8 @@ export const OBJECTIVE_COLOR_VARS = [
   "--chart-8",
   "--chart-9",
   "--chart-10",
+  "--chart-11",
+  "--chart-12",
 ] as const;
 
 export type ObjectiveColorVar = (typeof OBJECTIVE_COLOR_VARS)[number];

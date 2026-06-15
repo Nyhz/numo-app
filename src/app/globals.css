@@ -37,6 +37,8 @@
   --chart-8: 84 65% 50%;
   --chart-9: 292 70% 62%;
   --chart-10: 25 85% 58%;
+  --chart-11: 25 60% 36%; /* brown — dark + warm, distinct from the orange above */
+  --chart-12: 54 96% 60%; /* yellow */
   /* Non-equity portfolio categories (sector chart). Gold = commodities,
      violet = crypto — distinct from the equity-sector palette above. */
   --chart-gold: 45 93% 52%;
@@ -84,6 +86,8 @@
   --chart-8: 84 65% 40%;
   --chart-9: 292 70% 50%;
   --chart-10: 25 85% 48%;
+  --chart-11: 25 65% 30%; /* brown */
+  --chart-12: 50 92% 48%; /* yellow */
   --chart-gold: 43 90% 47%;
   --chart-crypto: 280 70% 56%;
 }

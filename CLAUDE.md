@@ -2,7 +2,7 @@
 
 > How to work in this battlefield. The product — stack, routes, entities, behaviour, directory layout, env vars — lives in SPEC.md. This file is rules, scripts, and discipline only. When in doubt, see SPEC.
 
-Address the user as **Commander**. Finances Panel is EUR-first, single-user, LAN-only. No auth, no Docker, no Bun, no monorepo tooling. pnpm + Node 22+ (Next 16 requirement).
+Address the user as **Commander**. Patrimonio (the Finances Panel) is EUR-first, single-user, LAN-only. No auth, no Docker, no Bun, no monorepo tooling. pnpm + Node 22+ (Next 16 requirement).
 
 ---
 
@@ -72,7 +72,7 @@ Position and cash-balance recomputation is part of the transaction that inserts 
 
 The CSV importer subsystem was removed (2026-06; manual entry is the only registration path). Dedup discipline survives it: every inserted `asset_transactions` / `account_cash_movements` row carries a `rowFingerprint` (see SPEC §5.4). Do not insert a row without one.
 
-The Yahoo client is wrapped in `src/lib/pricing.ts`. Tests must stub it — no real network calls in the test suite. The cron route (`src/app/api/cron/sync-prices/route.ts`) is gated by `CRON_SECRET` and must be idempotent within a calendar day. See SPEC §6.
+The market-data clients (Yahoo, CoinGecko, and JustETF for geographic composition) are wrapped under `src/lib/pricing/`. Tests must stub them — no real network calls in the test suite. The cron route (`src/app/api/cron/sync-prices/route.ts`) is gated by `CRON_SECRET` and must be idempotent within a calendar day; besides prices it refreshes the sector (7-day) and geography (30-day) composition snapshots. See SPEC §6.
 
 ---
 
@@ -83,7 +83,7 @@ The Yahoo client is wrapped in `src/lib/pricing.ts`. Tests must stub it — no r
 - Don't spin up a separate API service or worker process. Server Actions + the inline cron route are the entire backend.
 - Don't add Docker, Bun, workspace packages, or monorepo tooling.
 - Don't install a global state library (Zustand, Redux, Jotai). If you think you need one, you're probably fighting the Server Component model — reconsider.
-- Don't call Yahoo directly from a component or action. Go through `src/lib/pricing.ts`.
+- Don't call a market-data provider (Yahoo, CoinGecko, JustETF) directly from a component or action. Go through `src/lib/pricing/`.
 - Don't render money without `<SensitiveValue>`.
 - Don't amend or rewrite shipped migrations.
 - Don't commit the SQLite file or anything under `data/`.

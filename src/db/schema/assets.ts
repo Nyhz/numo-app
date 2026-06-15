@@ -26,6 +26,12 @@ export const assets = sqliteTable(
       onDelete: "set null",
     }),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    /** When true, the asset is left out of the allocation-objectives view
+     *  entirely (not even «Sin objetivo») and excluded from its valued total.
+     *  For non-discretionary holdings like a fixed-contribution pension/EPSV. */
+    excludeFromObjectives: integer("exclude_from_objectives", { mode: "boolean" })
+      .notNull()
+      .default(false),
     notes: text("notes"),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),

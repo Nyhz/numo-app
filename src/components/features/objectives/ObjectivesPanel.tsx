@@ -235,16 +235,16 @@ export function ObjectivesPanel({
                       ·{b.assets.length}
                     </span>
                   </span>
-                  <span className="flex items-center gap-4">
+                  <span className="flex shrink-0 items-center gap-4">
                     <span className="flex flex-col items-end leading-tight">
-                      <span className="text-sm tabular-nums">
+                      <span className="whitespace-nowrap text-sm tabular-nums">
                         {formatPercent(b.weightPct / 100)}{" "}
                         <span className="text-muted-foreground">
                           / {formatPercent(b.objective!.targetPct / 100)}
                         </span>
                       </span>
                       {b.driftEur != null && Math.abs(b.driftEur) >= 1 ? (
-                        <SensitiveValue className={`text-xs tabular-nums ${tone}`}>
+                        <SensitiveValue className={`whitespace-nowrap text-xs tabular-nums ${tone}`}>
                           {b.driftEur > 0
                             ? `faltan ${formatEur(b.driftEur)}`
                             : `sobran ${formatEur(-b.driftEur)}`}

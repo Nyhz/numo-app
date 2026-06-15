@@ -16,6 +16,11 @@ export type SectorWeight = {
   weight: number; // fraction 0..1
 };
 
+export type CountryWeight = {
+  country: string; // canonical key, e.g. "united_states" or "other"
+  weight: number; // fraction 0..1
+};
+
 export type CoinCandidate = {
   id: string;
   symbol: string;
