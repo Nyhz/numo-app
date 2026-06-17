@@ -14,16 +14,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  // Per-page titles render as "Extracto · Patrimonio", etc.
+  // Per-page titles render as "Extracto · Numo", etc.
   title: {
-    default: "Patrimonio — cuartel financiero",
-    template: "%s · Patrimonio",
+    default: "Numo — patrimonio, en claro",
+    template: "%s · Numo",
   },
   description:
-    "Panel de inversión personal en euros: patrimonio, cartera, objetivos de asignación, fiscalidad foral y asesor financiero. Privado, en local.",
-  applicationName: "Patrimonio",
+    "Tu patrimonio en claro: cartera, objetivos de asignación, fiscalidad foral y asesor financiero, todo en euros. Privado, en local.",
+  applicationName: "Numo",
   authors: [{ name: "Commander" }],
-  keywords: ["patrimonio", "inversión", "cartera", "ETF", "FIRE", "fiscalidad", "EUR"],
+  keywords: ["Numo", "patrimonio", "inversión", "cartera", "ETF", "FIRE", "fiscalidad", "EUR"],
   // Single-user LAN app — keep it out of search indexes.
   robots: { index: false, follow: false },
 };
