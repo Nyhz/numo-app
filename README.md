@@ -26,8 +26,38 @@ No cloud. No auth. No subscription tier. One SQLite file, a couple of `launchd` 
 
 ---
 
+## Previews
+
+> Dark mode, **modo sensible activado** — todos los importes van difuminados a propósito (es un panel privado de un solo usuario). Las cifras reales no se muestran.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/resumen.png"><img src="docs/screenshots/resumen.png" alt="Resumen — KPIs, evolución del patrimonio y posiciones"></a>
+      <br><sub><b>Resumen</b> — KPIs range-aware, curva de evolución anclada a 100 y posiciones.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/extracto.png"><img src="docs/screenshots/extracto.png" alt="Extracto — composición por tipo, región, objetivo y sector"></a>
+      <br><sub><b>Extracto</b> — composición por tipo, región, objetivo y sector + riesgo.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/watchlist.png"><img src="docs/screenshots/watchlist.png" alt="Watchlist — seguimiento intradía y alertas de precio"></a>
+      <br><sub><b>Watchlist</b> — seguimiento intradía (~5 min) y alertas de precio.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/asesor.png"><img src="docs/screenshots/asesor.png" alt="Asesor — chat con Claude sobre la cartera en vivo"></a>
+      <br><sub><b>Asesor</b> — chat con Claude sobre tu cartera, perfil y mercados.</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## Contents
 
+- [Previews](#previews)
 - [Capabilities](#capabilities)
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
