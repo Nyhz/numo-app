@@ -14,16 +14,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  // Per-page titles render as "Extracto · Numo", etc.
+  // Per-page titles render as "Extracto · Numo App", etc.
   title: {
-    default: "Numo — patrimonio, en claro",
-    template: "%s · Numo",
+    default: "Numo App — patrimonio, en claro",
+    template: "%s · Numo App",
   },
   description:
     "Tu patrimonio en claro: cartera, objetivos de asignación, fiscalidad foral y asesor financiero, todo en euros. Privado, en local.",
-  applicationName: "Numo",
+  applicationName: "Numo App",
   authors: [{ name: "Commander" }],
-  keywords: ["Numo", "patrimonio", "inversión", "cartera", "ETF", "FIRE", "fiscalidad", "EUR"],
+  keywords: ["Numo App", "patrimonio", "inversión", "cartera", "ETF", "FIRE", "fiscalidad", "EUR"],
   // Single-user LAN app — keep it out of search indexes.
   robots: { index: false, follow: false },
 };

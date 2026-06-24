@@ -2,7 +2,7 @@
 
 > How to work in this battlefield. The product — stack, routes, entities, behaviour, directory layout, env vars — lives in SPEC.md. This file is rules, scripts, and discipline only. When in doubt, see SPEC.
 
-Address the user as **Commander**. Patrimonio (the Finances Panel) is EUR-first, single-user, LAN-only. No auth, no Docker, no Bun, no monorepo tooling. pnpm + Node 22+ (Next 16 requirement).
+Address the user as **Commander**. Numo App (the Finances Panel) is EUR-first, single-user, LAN-only. No auth, no Docker, no Bun, no monorepo tooling. pnpm + Node 22+ (Next 16 requirement).
 
 ---
 

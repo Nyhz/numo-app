@@ -1,4 +1,4 @@
-# SPEC.md — Patrimonio (Finances Panel)
+# SPEC.md — Numo App
 
 > Standalone personal investment dashboard. EUR-first, single-user, LAN-only.
 > Ported from the `second-brain` monorepo into a fully self-contained Next.js app. No Docker, no Bun, no external API service, no workspace dependencies. pnpm + Node 22+ only.
@@ -424,7 +424,7 @@ DB_PATH=./data/finances.db
 CRON_SECRET=<random>
 YAHOO_USER_AGENT=<optional override>
 COINGECKO_API_KEY=<optional, enables crypto price sync>
-NEXT_PUBLIC_APP_NAME=Patrimonio          # top-nav brand
+NEXT_PUBLIC_APP_NAME=Numo App            # top-nav brand
 PORT=3200
 
 # AI advisor (asesor). Uses the Claude Agent SDK via the Max subscription token,
