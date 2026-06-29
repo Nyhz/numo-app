@@ -199,4 +199,37 @@ describe("getNetWorthSeries — cost fallback for unpriced holdings", () => {
     const p = series.find((s) => s.date === "2026-01-05");
     expect(p!.valueEur).toBeCloseTo(7800, 2); // market value wins, not cost
   });
+
+  it("bridges the gap between a buy and the first real valuation at cost (no phantom dip)", async () => {
+    const db = makeDb();
+    seedAccount(db);
+    // Crypto holds the daily date axis (mirrors prod: weekends present), so the
+    // gap days exist as chart points.
+    db.insert(schema.assets)
+      .values({ id: "ast_btc", name: "BTC", assetType: "crypto", currency: "EUR" })
+      .run();
+    seedTrade(db, "tx_btc", "ast_btc", "buy", "2026-01-05", 1, 1000);
+    for (const d of ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"]) {
+      seedValuation(db, "ast_btc", d, 1, 1000);
+    }
+    // Fund bought 01-05, but FT publishes its first NAV only on 01-08 →
+    // 01-06/01-07 have no valuation row at all (exactly the Groupama case).
+    db.insert(schema.assets)
+      .values({ id: "ast_grp", name: "Groupama", assetType: "fund", currency: "EUR" })
+      .run();
+    seedTrade(db, "tx_grp", "ast_grp", "buy", "2026-01-05", 2, 7697.3);
+    seedValuation(db, "ast_grp", "2026-01-08", 2, 7710);
+
+    const series = await getNetWorthSeries({ range: "ALL" }, db);
+    // Held days before the first NAV carry the fund at cost (1000 + 7697.3),
+    // matching the contribution that already counts it → no phantom dip.
+    for (const d of ["2026-01-05", "2026-01-06", "2026-01-07"]) {
+      const p = series.find((s) => s.date === d);
+      expect(p, d).toBeDefined();
+      expect(p!.valueEur, d).toBeCloseTo(8697.3, 2);
+    }
+    // Once the real NAV lands it takes over (1000 + 7710).
+    const last = series.find((s) => s.date === "2026-01-08");
+    expect(last!.valueEur).toBeCloseTo(8710, 2);
+  });
 });

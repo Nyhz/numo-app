@@ -353,44 +353,55 @@ async function computeNetWorthSeries(
   }
   const allRows = [...carryIns, ...rows];
 
-  // Cost-basis fallback: a held asset with no market valuation yet (e.g. a fund
-  // bought before its first NAV publishes) is otherwise ignored by the market-
-  // value line while the invested line already counts the purchase — reading as
-  // a phantom loss. Synthesise an at-cost valuation (cumulative −cashImpact, the
-  // same figure the invested line uses) at each trade date so the two lines
-  // track. Only for assets with NO real valuation in scope; once a real price
-  // exists it takes over. In-memory only — nothing is written to the DB.
-  const valuedAssetIds = new Set(allRows.map((r) => r.assetId));
-  const unpricedAssetIds = scopeAssetIdList.filter((id) => !valuedAssetIds.has(id));
-  if (unpricedAssetIds.length > 0) {
-    const costTrades = await db
-      .select({
-        assetId: assetTransactions.assetId,
-        tradedAt: assetTransactions.tradedAt,
-        cashImpactEur: assetTransactions.cashImpactEur,
-      })
-      .from(assetTransactions)
-      .where(inArray(assetTransactions.assetId, unpricedAssetIds))
-      .orderBy(asc(assetTransactions.tradedAt))
-      .all();
-    const runningByAsset = new Map<string, number>();
-    for (const t of costTrades) {
-      const running = (runningByAsset.get(t.assetId) ?? 0) - t.cashImpactEur;
-      runningByAsset.set(t.assetId, running);
-      if (running <= 0) continue;
-      // Clamp pre-window trades to the window start so the cost carries in.
-      const tradeIso = toIsoDate(new Date(t.tradedAt));
-      allRows.push({
-        id: "",
-        assetId: t.assetId,
-        valuationDate: tradeIso < startIso ? startIso : tradeIso,
-        quantity: 0,
-        unitPriceEur: 0,
-        marketValueEur: Math.round(running * 100) / 100,
-        priceSource: "cost",
-        createdAt: 0,
-      });
+  // Cost-basis fallback: a held asset with no market valuation on a day is
+  // otherwise ignored by the market-value line while the invested line already
+  // counts the purchase — reading as a phantom loss/dip. Two shapes: (a) an
+  // asset with NO real valuation yet (fresh fund, NAV lag), and (b) the gap
+  // between a buy and the asset's FIRST published price (e.g. a fund bought on
+  // a day the provider hasn't quoted — the contribution lands days before the
+  // value does, so TWR craters then snaps back). Synthesise an at-cost
+  // valuation (cumulative −cashImpact, the figure the invested line uses) at
+  // each trade date that PRECEDES the asset's earliest real valuation; from
+  // there the real price and its forward-fill below take over. In-memory only.
+  const firstRealValByAsset = new Map<string, string>();
+  for (const r of allRows) {
+    const cur = firstRealValByAsset.get(r.assetId);
+    if (cur === undefined || r.valuationDate < cur) {
+      firstRealValByAsset.set(r.assetId, r.valuationDate);
     }
+  }
+  const costTrades = await db
+    .select({
+      assetId: assetTransactions.assetId,
+      tradedAt: assetTransactions.tradedAt,
+      cashImpactEur: assetTransactions.cashImpactEur,
+    })
+    .from(assetTransactions)
+    .where(inArray(assetTransactions.assetId, scopeAssetIdList))
+    .orderBy(asc(assetTransactions.tradedAt))
+    .all();
+  const runningByAsset = new Map<string, number>();
+  for (const t of costTrades) {
+    const running = (runningByAsset.get(t.assetId) ?? 0) - t.cashImpactEur;
+    runningByAsset.set(t.assetId, running);
+    if (running <= 0) continue;
+    // Clamp pre-window trades to the window start so the cost carries in.
+    const tradeIso = toIsoDate(new Date(t.tradedAt));
+    const valuationDate = tradeIso < startIso ? startIso : tradeIso;
+    // Once a real valuation exists on/before this date, it (not cost) is
+    // authoritative — undefined firstReal means the asset is never priced.
+    const firstReal = firstRealValByAsset.get(t.assetId);
+    if (firstReal !== undefined && valuationDate >= firstReal) continue;
+    allRows.push({
+      id: "",
+      assetId: t.assetId,
+      valuationDate,
+      quantity: 0,
+      unitPriceEur: 0,
+      marketValueEur: Math.round(running * 100) / 100,
+      priceSource: "cost",
+      createdAt: 0,
+    });
   }
 
   // Figure out whether any asset in scope trades weekends (crypto). If none
