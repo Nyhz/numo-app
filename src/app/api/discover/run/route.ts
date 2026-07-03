@@ -8,6 +8,10 @@ import { persistDiscover, realClients } from "@/src/lib/discover/run";
 
 export const dynamic = "force-dynamic";
 
+// In-process mutex (auditoría 2026-07): sin él, cada POST apila un run del
+// agente completo — amplificación directa de gasto de crédito Claude.
+let running = false;
+
 // Manual "Descubrir ahora" with live progress. Streams the agent's narration +
 // per-candidate verification as SSE, persists the confirmed set at the end, and
 // records the run in advisor_runs (kind=discover). The weekly cron uses the
@@ -16,6 +20,10 @@ export async function POST(): Promise<Response> {
   if (process.env.DISCOVER_ENABLED === "false") {
     return Response.json({ error: "discover desactivado" }, { status: 400 });
   }
+  if (running) {
+    return Response.json({ error: "ya hay un descubrimiento en curso" }, { status: 409 });
+  }
+  running = true;
 
   const model = process.env.DISCOVER_SCAN_MODEL ?? "claude-sonnet-4-6";
   const startedAt = Date.now();
@@ -93,6 +101,8 @@ export async function POST(): Promise<Response> {
         });
         send({ type: "error", message: friendly });
         close();
+      } finally {
+        running = false;
       }
     },
   });

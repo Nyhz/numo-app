@@ -56,6 +56,7 @@ export async function runCurate(opts: {
       prompt: "Reconstruye y depura el digest ahora.",
       allowedTools: [],
       maxTurns: 2,
+      timeoutMs: 300_000,
     });
 
   let res = await call(system);

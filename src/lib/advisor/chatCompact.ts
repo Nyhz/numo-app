@@ -42,6 +42,7 @@ export async function runChatCompact(opts: {
     prompt: raw,
     allowedTools: [],
     maxTurns: 1,
+    timeoutMs: 300_000,
   });
   const summary = res.text.trim();
   if (!summary) throw new Error("El resumen de chats salió vacío.");

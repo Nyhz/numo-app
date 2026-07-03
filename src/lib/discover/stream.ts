@@ -77,6 +77,7 @@ export async function* discoverStream(opts: {
       prompt: PROMPT,
       allowedTools: ["WebSearch", "WebFetch"],
       maxTurns: 16,
+      timeoutMs: 900_000,
     });
     proposals = parseProposals(retry.text);
     usage = retry;

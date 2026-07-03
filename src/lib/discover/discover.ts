@@ -108,6 +108,7 @@ export async function runDiscover(opts: {
         prompt,
         allowedTools: ["WebSearch", "WebFetch"],
         maxTurns: 16,
+        timeoutMs: 900_000,
       }));
 
   let res = await runAgent(system, "Descubre ahora oportunidades para los baremos indicados.");

@@ -92,6 +92,7 @@ export async function runScan(opts: {
       prompt: "Realiza ahora el escaneo de mercado.",
       allowedTools: ["WebSearch", "WebFetch"],
       maxTurns: 16,
+      timeoutMs: 600_000,
     });
 
   let res = await call(system);
