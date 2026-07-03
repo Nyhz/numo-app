@@ -9,16 +9,22 @@ Address the user as **Commander**. Numo App (the Finances Panel) is EUR-first, s
 ## Scripts
 
 ```
-pnpm dev              # next dev
+pnpm dev              # next dev  (port 3200)
 pnpm build            # next build
-pnpm start            # next start
+pnpm start            # next start (port 3200; supervised by launchd com.finances.app)
 pnpm typecheck        # tsc --noEmit
-pnpm lint             # eslint (config from create-next-app)
-pnpm test             # vitest
+pnpm lint             # eslint + scripts/check-migrations.mjs (data-mutation guard)
+pnpm test             # vitest (network stubbed)
 pnpm db:generate      # drizzle-kit generate
 pnpm db:migrate       # apply migrations
 pnpm db:seed          # optional seed data for dev
-pnpm sync:prices      # local trigger of the Yahoo sync route
+pnpm db:backup        # timestamped copy of the SQLite file
+pnpm sync:prices      # local trigger of the price-sync cron route (Yahoo/CoinGecko/FT)
+pnpm advisor:scan|advisor:curate|advisor:chat-compact   # trigger AI crons locally
+pnpm backfill:asset-class   # infer + persist assets.assetClassTax (fiscal class)
+pnpm backfill:tax-lots      # rebuild FIFO tax lots from the ledger
+pnpm backfill:funds         # FT historical NAVs for priceSource='ft' funds
+pnpm tg:net|tg:ask|tg:bot   # Telegram: snapshot / one-shot advisor / bot daemon
 ```
 
 **Scaffolding discipline.** The baseline project is created with `pnpm create next-app@latest` — see SPEC §0 for the exact invocation. Never hand-write `package.json`, `tsconfig.json`, or `next.config.*`. Accept the versions the generator ships with for Next, React, React-DOM, Tailwind, and ESLint; only pin a version if a peer-dep break forces it, and write the reason in the commit. **If `pnpm install` fails twice in a row, stop and debrief — do not thrash through version permutations.**

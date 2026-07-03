@@ -51,7 +51,7 @@ Turbopack is disabled at scaffold time because gates run `next build` (webpack),
 | Tests | Vitest (unit) |
 | Lint | ESLint (the config that ships with `create-next-app`) |
 | PDF | `jspdf` (or equivalent) for account statements and tax reports |
-| Price source | `yahoo-finance2` (equities/ETFs/FX) + CoinGecko (crypto, EUR-native) |
+| Price source | `yahoo-finance2` (equities/ETFs/FX) + CoinGecko (crypto, EUR-native) + Financial Times (mutual-fund NAVs by ISIN, per-asset `priceSource='ft'` override) |
 | Composition data | Yahoo (sectors, via `topHoldings`/`assetProfile`) + JustETF (geography by ISIN, scraped) |
 | AI advisor | Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`), billed to the Max subscription via `CLAUDE_CODE_OAUTH_TOKEN` |
 
@@ -160,7 +160,7 @@ All monetary values are stored in EUR (base currency) alongside native currency 
 
 **Account** — `id`, `name`, `currency`, `accountType` (broker / bank / crypto / cash / other), `openingBalanceEur`, `currentCashBalanceEur`, `createdAt`, `updatedAt`.
 
-**Asset** — `id`, `name`, `assetType` (etf / stock / bond / crypto / fund / cash-equivalent / other), `subtype` (optional), `symbol`, `ticker`, `isin`, `exchange`, `providerSymbol` (Yahoo Finance symbol override), `currency`, `ter` (annual %), `objectiveId`, `excludeFromObjectives` (leave out of the allocation plan), `isActive`, `isWatchlisted` (starred for the Watchlist + intraday refresh), `notes`.
+**Asset** — `id`, `name`, `assetType` (etf / stock / bond / crypto / fund / cash-equivalent / other), `subtype` (optional), `symbol`, `ticker`, `isin`, `exchange`, `providerSymbol` (Yahoo Finance symbol override), `priceSource` (null = provider by type; `'ft'` routes quotes to Financial Times by ISIN), `assetClassTax` (clase fiscal: decide la ventana antiaplicación 2 vs 12 meses y el bloque M720/M721; se infiere al crear el activo y se puede recalcular con `pnpm backfill:asset-class`), `currency`, `ter` (annual %), `objectiveId`, `excludeFromObjectives` (leave out of the allocation plan), `isActive`, `isWatchlisted` (starred for the Watchlist + intraday refresh), `notes`.
 
 **WatchlistQuote** (one per watchlisted asset, upserted) — `id`, `assetId`, `price`, `currency`, `asOf`, `source` (`yahoo`/`coingecko`), `updatedAt`. Last-write-wins intraday cache filled by the `sync-watchlist` cron (≈5 min). **Not a time series and never written to `price_history`** — the daily 23:00 close stays the only source of truth for history, valuations, and long-range charts.
 
@@ -286,6 +286,8 @@ Read-only runtime card (app name, base currency EUR, `DB_PATH`, Node version) pl
 
 ### Source
 Yahoo Finance via `yahoo-finance2`. Symbol resolution precedence: `asset.providerSymbol` → `asset.symbol` → `asset.ticker`. If an asset has `manualPrice` set and `manualPriceAsOf` is fresh enough, it overrides market lookup.
+
+**Provider selection per asset.** `asset.priceSource` overrides the by-type default (`null` = pick by type: Yahoo for equities/ETFs/funds, CoinGecko for crypto). Set `priceSource='ft'` for mutual funds Yahoo can't quote (e.g. Groupama Trésorerie — Yahoo frozen at 2019): the Financial Times client (`src/lib/pricing/ft.ts`) resolves NAV + history by `ISIN:CUR`. Historical NAV backfill for FT-sourced funds: `pnpm backfill:funds`. FT rows land in `price_history` with `source='ft'`.
 
 ### Sync job
 Inline scheduled route, not a separate worker.
@@ -447,6 +449,14 @@ TELEGRAM_CHAT_ID=<chat del usuario con el bot>
 # como `mcp__myinvestor__*` y van en el allow-list del chat.
 ADVISOR_MYINVESTOR_ENABLED=true
 MYINVESTOR_MCP_URL=https://mcp.myinvestor.es/mcp
+
+# Descubridor semanal de oportunidades (agente Claude + verificación Yahoo).
+DISCOVER_ENABLED=true
+DISCOVER_SCAN_MODEL=claude-sonnet-4-6
+DISCOVER_TELEGRAM_ENABLED=true           # resumen por Telegram tras un run con hallazgos
+
+# Watchlist: refresco intradía (~5 min) de cotizaciones vía launchd.
+WATCHLIST_SYNC_ENABLED=true
 ```
 
 No `NEXT_PUBLIC_API_URL` — data is fetched server-side via Drizzle, not HTTP.
