@@ -40,4 +40,24 @@ describe("buildCasillasCsv", () => {
     const ddiLine = csv.split("\n").find((l) => l.startsWith("0588"));
     expect(ddiLine?.endsWith("|0.00")).toBe(true);
   });
+
+  it("0029 holds only Spanish payments on account \u2014 origin withholding stays out (DDI-only)", () => {
+    // Auditor\u00eda 2026-07: sumar la retenci\u00f3n en origen al 0029 adem\u00e1s de
+    // concederle DDI en el 0588 la contaba dos veces.
+    const csv = buildCasillasCsv(
+      sample({ withholdingOrigenTotalEur: txEur(18), withholdingDestinoTotalEur: txEur(25) }),
+      18,
+      { grossEur: 0, withholdingEur: 7 },
+    );
+    const line = csv.split("\n").find((l) => l.startsWith("0029"));
+    expect(line?.endsWith("|32.00")).toBe(true); // 25 destino + 7 inter\u00e9s, sin los 18 de origen
+  });
+
+  it("adds an interest gross row only when interest exists", () => {
+    const without = buildCasillasCsv(sample(), 0);
+    expect(without).not.toContain("Intereses de cuentas");
+    const with_ = buildCasillasCsv(sample(), 0, { grossEur: 110, withholdingEur: 19 });
+    const line = with_.split("\n").find((l) => l.includes("Intereses de cuentas"));
+    expect(line?.endsWith("|110.00")).toBe(true);
+  });
 });

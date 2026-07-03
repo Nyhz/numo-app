@@ -25,6 +25,8 @@ type FormState = {
   currency: string;
   /** Broker's direction (DEGIRO): 1 EUR = X CCY. Always typed by hand. */
   fxEurToCcy: string;
+  /** Retención practicada en EUR — solo intereses. */
+  withholdingTaxEur: string;
   description: string;
 };
 
@@ -69,6 +71,7 @@ export function CreateCashMovementModal({
       amount: "",
       currency: picked?.currency ?? "EUR",
       fxEurToCcy: "",
+      withholdingTaxEur: "",
       description: "",
     };
   }, [accounts, defaultAccountId]);
@@ -143,6 +146,7 @@ export function CreateCashMovementModal({
     if (extra?.allowFxDeviation) acceptedRef.current.fxDeviation = true;
 
     const fxRate = form.fxEurToCcy.trim();
+    const withholding = form.withholdingTaxEur.trim();
     const payload = {
       accountId: form.accountId,
       kind: form.kind,
@@ -150,6 +154,8 @@ export function CreateCashMovementModal({
       amountNative: Number(form.amount),
       currency: form.currency.toUpperCase(),
       fxEurToCcy: fxRate ? Number(fxRate) : undefined,
+      withholdingTaxEur:
+        form.kind === "interest" && withholding ? Number(withholding) : undefined,
       description: form.description.trim() ? form.description : undefined,
       allowDuplicate: acceptedRef.current.duplicate,
       allowFxDeviation: acceptedRef.current.fxDeviation,
@@ -300,6 +306,28 @@ export function CreateCashMovementModal({
                 nunca se aplica automáticamente.
               </span>
             )}
+          </Field>
+        )}
+
+        {form.kind === "interest" && (
+          <Field
+            label="Retención practicada (EUR, opcional)"
+            errors={fieldErrors.withholdingTaxEur}
+          >
+            <input
+              type="number"
+              inputMode="decimal"
+              step="any"
+              min="0"
+              value={form.withholdingTaxEur}
+              onChange={(e) => update("withholdingTaxEur", e.target.value)}
+              className={inputClass}
+              placeholder="p. ej. el 19 % que retiene el banco"
+            />
+            <span className="text-xs text-muted-foreground">
+              Registra como importe el interés NETO abonado; la retención se suma para el
+              bruto fiscal y descuenta como pago a cuenta en la previsión.
+            </span>
           </Field>
         )}
 

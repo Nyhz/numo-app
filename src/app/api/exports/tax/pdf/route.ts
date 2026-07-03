@@ -15,16 +15,25 @@ export async function GET(req: Request) {
   const report = snapshot?.payload.report ?? buildTaxReport(db, year);
   const models: InformationalModelsStatus = snapshot
     ? snapshot.payload
-    : computeInformationalModelsStatus(db, year, aggregateBlocksFromBalances(report.yearEndBalances));
+    : computeInformationalModelsStatus(
+        db,
+        year,
+        aggregateBlocksFromBalances(report.yearEndBalances, report.yearEndCashBalances ?? []),
+      );
   // Sealed years use the interest frozen at seal time — the sealed PDF must
   // be fully reproducible from the snapshot (audit F8).
-  const interestEur = snapshot?.payload.interestEur ?? (await getInterestForYear(year, db));
+  const interest = snapshot
+    ? {
+        grossEur: snapshot.payload.interestEur ?? 0,
+        withholdingEur: snapshot.payload.interestWithholdingEur ?? 0,
+      }
+    : await getInterestForYear(year, db);
   const pdf = buildTaxReportPdf({
     year,
     report,
     models,
     sealedAt: snapshot?.sealedAt ?? null,
-    interestEur,
+    interest,
   });
   return new NextResponse(pdf as unknown as BodyInit, {
     headers: {

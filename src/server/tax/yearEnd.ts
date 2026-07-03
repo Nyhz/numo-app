@@ -6,7 +6,13 @@ import type { DB } from "../../db/client";
 // src/server/tax/ (see eslint.config.mjs): Modelo 720/721 declare market
 // value at year-end by legal definition. Everything else in the tax engine is
 // barred from market tables at lint level.
-import { accounts, assets, assetTransactions, assetValuations } from "../../db/schema";
+import {
+  accountCashMovements,
+  accounts,
+  assets,
+  assetTransactions,
+  assetValuations,
+} from "../../db/schema";
 
 export type YearEndBalance = {
   accountId: string;
@@ -32,6 +38,48 @@ export type YearEndBalance = {
 // A year-end valuation older than this many days before Dec 31 is flagged
 // stale on the balance row (audit T5) — the M720 value may be far off.
 export const YEAR_END_VALUATION_STALE_DAYS = 10;
+
+export type YearEndCashBalance = {
+  accountId: string;
+  accountName: string | null;
+  accountCountry: string | null;
+  accountType: string;
+  /** Saldo contable a 31-dic (apertura + movimientos), EUR del ledger —
+   *  no depende de valoraciones de mercado. */
+  balanceEur: number;
+};
+
+/**
+ * Efectivo por cuenta a cierre de ejercicio, desde el ledger. Alimenta los
+ * bloques `bank-accounts` del M720 (field-check P1 #3: el cash de cuentas
+ * extranjeras nunca llegaba a los bloques — solo se agregaban posiciones).
+ */
+export function buildYearEndCashBalances(db: DB, end: number): YearEndCashBalance[] {
+  const movementSums = new Map<string, number>();
+  const movements = db
+    .select()
+    .from(accountCashMovements)
+    .where(lt(accountCashMovements.occurredAt, end))
+    .all();
+  for (const m of movements) {
+    if (!m.affectsCashBalance) continue;
+    movementSums.set(m.accountId, (movementSums.get(m.accountId) ?? 0) + m.cashImpactEur);
+  }
+
+  const out: YearEndCashBalance[] = [];
+  for (const a of db.select().from(accounts).all()) {
+    const balance = roundEur(a.openingBalanceEur + (movementSums.get(a.id) ?? 0));
+    if (balance <= 0) continue;
+    out.push({
+      accountId: a.id,
+      accountName: a.name,
+      accountCountry: a.countryCode ?? null,
+      accountType: a.accountType,
+      balanceEur: balance,
+    });
+  }
+  return out;
+}
 
 export function buildYearEndBalances(db: DB, end: number): YearEndBalance[] {
   const yearEndIso = new Date(end - 86_400_000).toISOString().slice(0, 10);

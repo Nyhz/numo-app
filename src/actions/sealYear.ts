@@ -25,7 +25,10 @@ export async function sealYear(
       const existing = tx.select().from(taxYearSnapshots).where(eq(taxYearSnapshots.year, year)).get();
       if (existing) throw new Error(`el ejercicio ${year} ya está sellado`);
       const report = buildTaxReport(tx as unknown as DB, year);
-      const blocks = aggregateBlocksFromBalances(report.yearEndBalances);
+      const blocks = aggregateBlocksFromBalances(
+        report.yearEndBalances,
+        report.yearEndCashBalances ?? [],
+      );
       const models = computeInformationalModelsStatus(tx as unknown as DB, year, blocks);
       // Audit T4: sealing freezes the declared M720/M721 values. Refuse when
       // a foreign block contains unvalued positions unless the Commander
@@ -55,8 +58,14 @@ export async function sealYear(
       }
       // Freeze interest too: the sealed PDF's cuota estimate must be fully
       // reproducible from the snapshot (audit F8).
-      const interestEur = getInterestForYearSync(year, tx as unknown as DB);
-      const payload = { report, contentHash: reportContentHash(report), interestEur, ...models };
+      const interest = getInterestForYearSync(year, tx as unknown as DB);
+      const payload = {
+        report,
+        contentHash: reportContentHash(report),
+        interestEur: interest.grossEur,
+        interestWithholdingEur: interest.withholdingEur,
+        ...models,
+      };
       const id = ulid();
       tx.insert(taxYearSnapshots).values({
         id, year,

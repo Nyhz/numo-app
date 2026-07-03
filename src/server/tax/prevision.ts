@@ -1,6 +1,7 @@
 import { roundEur } from "../../lib/money";
 import { actualizationCoefficient } from "./coeficientes";
 import { estimateSavingsCuota, type CuotaEstimate } from "./cuota";
+import { ZERO_INTEREST, type TaxInterest } from "./interest";
 import type { DeclarationRow, TaxReport } from "./report";
 
 /**
@@ -33,7 +34,7 @@ export type Prevision = {
   cuota: CuotaEstimate;
 };
 
-export function buildPrevision(report: TaxReport, interestEur = 0): Prevision {
+export function buildPrevision(report: TaxReport, interest: TaxInterest = ZERO_INTEREST): Prevision {
   const declaration = report.declaration ?? [];
   const coefficientsAvailable =
     actualizationCoefficient(report.year, report.year) != null;
@@ -89,7 +90,7 @@ export function buildPrevision(report: TaxReport, interestEur = 0): Prevision {
         withholdingDestinoTotalEur: report.totals.withholdingDestinoTotalEur,
       },
     },
-    interestEur,
+    interest,
   );
 
   return {

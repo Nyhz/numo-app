@@ -42,4 +42,43 @@ describe("aggregateBlocksFromBalances", () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0].hasUnknownCountry).toBe(false);
   });
+
+  // Field-check P1 #3: foreign cash must reach the bank-accounts blocks.
+  it("adds year-end cash balances as bank-accounts blocks per country", () => {
+    const blocks = aggregateBlocksFromBalances(
+      [
+        { accountId: "a", accountName: "DEGIRO", accountCountry: "NL", accountType: "broker", assetId: "y", assetName: "VWCE", isin: "IE00BK5BQT80", assetClassTax: "etf", quantity: 1, valueEur: marketEur(30_000), valuationDate: "2025-12-31", priceSource: "test", unvalued: false, staleValuation: false },
+      ],
+      [
+        { accountId: "a", accountName: "DEGIRO", accountCountry: "NL", accountType: "broker", balanceEur: 12_000 },
+        { accountId: "c", accountName: "Kutxabank", accountCountry: "ES", accountType: "savings", balanceEur: 5_000 },
+      ],
+    );
+    const nlCash = blocks.find((b) => b.country === "NL" && b.type === "bank-accounts");
+    expect(nlCash?.valueEur).toBeCloseTo(12_000, 2);
+    expect(nlCash?.hasUnvalued).toBe(false);
+    const esCash = blocks.find((b) => b.country === "ES" && b.type === "bank-accounts");
+    expect(esCash?.valueEur).toBeCloseTo(5_000, 2);
+    // Securities block unaffected.
+    const nlSec = blocks.find((b) => b.country === "NL" && b.type === "broker-securities");
+    expect(nlSec?.valueEur).toBeCloseTo(30_000, 2);
+  });
+
+  it("merges cash into an existing bank-accounts block and taints unknown-country cash", () => {
+    const blocks = aggregateBlocksFromBalances(
+      [
+        // A savings-account position already lands in NL/bank-accounts.
+        { accountId: "a", accountName: "N26", accountCountry: "NL", accountType: "savings", assetId: "d", assetName: "Depo", isin: null, assetClassTax: "cash", quantity: 1, valueEur: marketEur(1_000), valuationDate: "2025-12-31", priceSource: "test", unvalued: false, staleValuation: false },
+      ],
+      [
+        { accountId: "a", accountName: "N26", accountCountry: "NL", accountType: "savings", balanceEur: 2_000 },
+        { accountId: "x", accountName: "Sin país", accountCountry: null, accountType: "savings", balanceEur: 700 },
+      ],
+    );
+    const nl = blocks.find((b) => b.country === "NL" && b.type === "bank-accounts");
+    expect(nl?.valueEur).toBeCloseTo(3_000, 2);
+    const unknown = blocks.find((b) => b.country === "??" && b.type === "bank-accounts");
+    expect(unknown?.valueEur).toBeCloseTo(700, 2);
+    expect(unknown?.hasUnknownCountry).toBe(true);
+  });
 });

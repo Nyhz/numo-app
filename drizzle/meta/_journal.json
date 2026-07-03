@@ -183,6 +183,13 @@
       "when": 1782481510735,
       "tag": "0025_absurd_warstar",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1783084362036,
+      "tag": "0026_flippant_sentry",
+      "breakpoints": true
     }
   ]
 }

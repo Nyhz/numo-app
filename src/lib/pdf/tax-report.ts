@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import type { DividendReportRow, SaleReportRow, TaxReport } from "../../server/tax/report";
 import type { InformationalModelsStatus } from "../../server/tax/m720";
+import type { TaxInterest } from "../../server/tax/interest";
 import { buildPrevision } from "../../server/tax/prevision";
 import {
   ACCENT,
@@ -43,8 +44,8 @@ export type TaxPdfInput = {
   report: TaxReport;
   models: InformationalModelsStatus;
   sealedAt: number | null;
-  /** Intereses de cuentas remuneradas del ejercicio (RCM), informativo. */
-  interestEur: number;
+  /** Intereses de cuentas remuneradas del ejercicio (RCM): bruto + retención. */
+  interest: TaxInterest;
 };
 
 type AssetSalesGroup = {
@@ -132,7 +133,7 @@ export function buildTaxReportPdf(input: TaxPdfInput): Uint8Array {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const cur: Cursor = { doc, y: 0 };
   const t = input.report.totals;
-  const prevision = buildPrevision(input.report, input.interestEur);
+  const prevision = buildPrevision(input.report, input.interest);
   const est = prevision.cuota;
 
   const room = (needed: number, onNewPage?: (c: Cursor) => void) =>
@@ -153,7 +154,7 @@ export function buildTaxReportPdf(input: TaxPdfInput): Uint8Array {
   });
 
   // ── Tarjetas de resumen ───────────────────────────────────────────────────
-  const rcm = t.dividendsGrossEur + input.interestEur;
+  const rcm = t.dividendsGrossEur + input.interest.grossEur;
   statCards(cur, [
     {
       kicker: "Resultado de ventas",
@@ -211,7 +212,12 @@ export function buildTaxReportPdf(input: TaxPdfInput): Uint8Array {
   kv("Dividendos brutos", fmtEur(t.dividendsGrossEur));
   kv("Retenciones en origen (extranjero)", fmtEur(t.withholdingOrigenTotalEur));
   kv("Retenciones en destino (pagos a cuenta)", fmtEur(t.withholdingDestinoTotalEur));
-  if (input.interestEur !== 0) kv("Intereses de cuentas (RCM)", fmtEur(input.interestEur));
+  if (input.interest.grossEur !== 0) {
+    kv("Intereses de cuentas (RCM bruto)", fmtEur(input.interest.grossEur));
+  }
+  if (input.interest.withholdingEur !== 0) {
+    kv("Retención sobre intereses (pago a cuenta)", fmtEur(input.interest.withholdingEur));
+  }
   if (input.report.excludedSales && input.report.excludedSales.count > 0) {
     room(12);
     doc.setFontSize(7);

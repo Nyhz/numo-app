@@ -4,6 +4,7 @@ import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur } from "@/src/lib/format";
 import type { TaxReport } from "@/src/server/tax/report";
 import type { Prevision } from "@/src/server/tax/prevision";
+import type { TaxInterest } from "@/src/server/tax/interest";
 
 /**
  * El ejercicio en tres cifras, en el orden en que el Commander se hace las
@@ -14,19 +15,20 @@ import type { Prevision } from "@/src/server/tax/prevision";
 export function TaxSummary({
   report,
   prevision,
-  interestEur,
+  interest,
 }: {
   report: TaxReport;
   prevision: Prevision;
-  interestEur: number;
+  interest: TaxInterest;
 }) {
   const t = report.totals;
   const est = prevision.cuota;
 
   const salesCount = report.sales.length;
   const dividendsCount = report.dividends.length;
-  const rcmGross = t.dividendsGrossEur + interestEur;
-  const withholdings = t.withholdingOrigenTotalEur + t.withholdingDestinoTotalEur;
+  const rcmGross = t.dividendsGrossEur + interest.grossEur;
+  const withholdings =
+    t.withholdingOrigenTotalEur + t.withholdingDestinoTotalEur + interest.withholdingEur;
 
   const net = t.netComputableEur;
   const netTone = net > 0 ? "text-success" : net < 0 ? "text-destructive" : "";
@@ -95,15 +97,15 @@ export function TaxSummary({
                   <span>
                     Dividendos <SensitiveValue>{formatEur(t.dividendsGrossEur)}</SensitiveValue> (
                     {dividendsCount} pago{dividendsCount === 1 ? "" : "s"})
-                    {interestEur > 0 ? (
+                    {interest.grossEur > 0 ? (
                       <>
-                        {" "}· intereses <SensitiveValue>{formatEur(interestEur)}</SensitiveValue>
+                        {" "}· intereses <SensitiveValue>{formatEur(interest.grossEur)}</SensitiveValue>
                       </>
                     ) : null}
                   </span>
                 ) : (
                   <span>
-                    Intereses <SensitiveValue>{formatEur(interestEur)}</SensitiveValue>
+                    Intereses <SensitiveValue>{formatEur(interest.grossEur)}</SensitiveValue>
                   </span>
                 )}
                 {withholdings > 0 ? (
@@ -134,9 +136,12 @@ export function TaxSummary({
               <span>
                 Base <SensitiveValue>{formatEur(est.baseAhorroEur)}</SensitiveValue> · cuota{" "}
                 <SensitiveValue>{formatEur(est.cuotaIntegraEur)}</SensitiveValue>
-                {est.ddiCreditEur > 0 || est.withholdingDestinoEur > 0 ? (
+                {est.ddiCreditEur > 0 || est.withholdingDestinoEur > 0 || est.interestWithholdingEur > 0 ? (
                   <>
-                    {" "}− <SensitiveValue>{formatEur(est.ddiCreditEur + est.withholdingDestinoEur)}</SensitiveValue>{" "}
+                    {" "}−{" "}
+                    <SensitiveValue>
+                      {formatEur(est.ddiCreditEur + est.withholdingDestinoEur + est.interestWithholdingEur)}
+                    </SensitiveValue>{" "}
                     ya pagado
                   </>
                 ) : null}

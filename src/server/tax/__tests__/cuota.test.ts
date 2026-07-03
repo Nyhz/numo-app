@@ -69,7 +69,7 @@ describe("estimateSavingsCuota (art. 66 foral — compartimentos estancos)", () 
   it("adds gains and RCM after the 1.500 € dividend exemption", () => {
     const est = estimateSavingsCuota(
       input({ netComputableEur: 10_000, dividendsGrossEur: 2_000 }),
-      500,
+      { grossEur: 500, withholdingEur: 0 },
     );
     expect(est.dividendExemptionAppliedEur).toBe(1_500);
     // RCM = 2000 − 1500 exención + 500 intereses = 1000.
@@ -130,5 +130,19 @@ describe("estimateSavingsCuota (art. 66 foral — compartimentos estancos)", () 
     expect(est.dividendExemptionAppliedEur).toBe(1_000);
     expect(est.cuotaIntegraEur).toBe(0);
     expect(est.resultadoEstimadoEur).toBe(-250);
+  });
+
+  it("subtracts the interest withholding as payment on account and uses the gross for the base", () => {
+    const est = estimateSavingsCuota(
+      input({ netComputableEur: 0, dividendsGrossEur: 0 }),
+      // €100 gross interest, of which the bank withheld €19.
+      { grossEur: 100, withholdingEur: 19 },
+    );
+    expect(est.saldoRcmEur).toBe(100);
+    expect(est.baseAhorroEur).toBe(100);
+    expect(est.interestWithholdingEur).toBe(19);
+    // 2025 scale: 100 × 20% = 20 de cuota − 19 retenido = 1 a pagar.
+    expect(est.cuotaIntegraEur).toBe(20);
+    expect(est.resultadoEstimadoEur).toBe(1);
   });
 });

@@ -30,15 +30,18 @@ export default async function TaxYearPage({ params }: { params: Params }) {
   const snapshotState = getSnapshotState(db, year);
   const snapshot = snapshotState.status === "ok" ? snapshotState.snapshot : null;
   const report = snapshot?.payload.report ?? buildTaxReport(db, year);
-  const blocks = aggregateBlocksFromBalances(report.yearEndBalances);
+  const blocks = aggregateBlocksFromBalances(
+    report.yearEndBalances,
+    report.yearEndCashBalances ?? [],
+  );
   const models: InformationalModelsStatus = snapshot
     ? snapshot.payload
     : computeInformationalModelsStatus(db, year, blocks);
   const drift = computeDriftSinceSeal(db, year);
   const baselines = listDeclaredBaselines(db);
   const years = await getTaxYears();
-  const interestEur = await getInterestForYear(year);
-  const prevision = buildPrevision(report, interestEur);
+  const interest = await getInterestForYear(year);
+  const prevision = buildPrevision(report, interest);
   const hasUnvalued = [...models.m720.blocks, ...models.m721.blocks].some(
     (b) => b.hasUnvalued,
   );
@@ -66,7 +69,7 @@ export default async function TaxYearPage({ params }: { params: Params }) {
         </div>
       ) : null}
       {drift ? <DriftBanner drift={drift} /> : null}
-      <TaxSummary report={report} prevision={prevision} interestEur={interestEur} />
+      <TaxSummary report={report} prevision={prevision} interest={interest} />
       <DeclarationTable rows={report.declaration ?? []} />
       <PrevisionCard
         prevision={prevision}

@@ -88,6 +88,44 @@ describe("buildTaxReport", () => {
   });
 });
 
+describe("buildTaxReport year-end cash balances (M720 bank-accounts)", () => {
+  it("computes per-account ledger cash at Dec 31 and skips non-positive balances", () => {
+    const db = makeDb();
+    const nl = ulid();
+    const es = ulid();
+    const drained = ulid();
+    db.insert(accounts).values([
+      { id: nl, name: "DEGIRO", currency: "EUR", accountType: "broker", countryCode: "NL", openingBalanceEur: 0, currentCashBalanceEur: 0 },
+      { id: es, name: "Kutxabank", currency: "EUR", accountType: "savings", countryCode: "ES", openingBalanceEur: 1_000, currentCashBalanceEur: 0 },
+      { id: drained, name: "Vacía", currency: "EUR", accountType: "savings", countryCode: "ES", openingBalanceEur: 0, currentCashBalanceEur: 0 },
+    ]).run();
+
+    const mov = (accountId: string, when: number, eur: number, affects = true) =>
+      db.insert(schema.accountCashMovements).values({
+        id: ulid(), accountId, movementType: eur >= 0 ? "deposit" : "withdrawal",
+        occurredAt: when, nativeAmount: eur, currency: "EUR", fxRateToEur: 1,
+        cashImpactEur: eur, affectsCashBalance: affects,
+      }).run();
+
+    const t = (y: number, m: number, d: number) => Date.UTC(y, m - 1, d);
+    mov(nl, t(2025, 3, 1), 12_000);
+    mov(nl, t(2025, 8, 1), -2_000);
+    mov(nl, t(2026, 1, 5), 99_999); // after year-end — excluded
+    mov(es, t(2025, 5, 1), 500);
+    mov(es, t(2025, 6, 1), 300, false); // shadow row — excluded
+    mov(drained, t(2025, 2, 1), -50); // negative balance — skipped
+
+    const report = buildTaxReport(db, 2025);
+    const cash = report.yearEndCashBalances ?? [];
+    expect(cash).toHaveLength(2);
+    const nlCash = cash.find((c) => c.accountId === nl);
+    expect(nlCash?.balanceEur).toBeCloseTo(10_000, 2);
+    expect(nlCash?.accountCountry).toBe("NL");
+    const esCash = cash.find((c) => c.accountId === es);
+    expect(esCash?.balanceEur).toBeCloseTo(1_500, 2); // opening 1000 + 500
+  });
+});
+
 describe("buildTaxReport dust filter", () => {
   it("excludes disposals where proceeds and cost basis are both below €1", () => {
     const db = makeDb();

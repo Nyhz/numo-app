@@ -14,6 +14,7 @@ import {
   allocateLargestRemainder,
   washSaleWindowForAssetClass,
 } from "./washSale";
+import { inferAssetClassTax } from "./classification";
 
 
 type MutableLot = {
@@ -52,7 +53,21 @@ export function recomputeLotsForAsset(tx: DbOrTx, assetId: string): void {
   tx.delete(taxLots).where(eq(taxLots.assetId, assetId)).run();
 
   const asset = tx.select().from(assets).where(eq(assets.id, assetId)).get();
-  const window = washSaleWindowForAssetClass(asset?.assetClassTax ?? null);
+  // Un assetClassTax nulo NO puede caer silenciosamente en la ventana de 2
+  // meses (auditoría 2026-07): si falta, se infiere de los metadatos del
+  // activo — la misma heurística que `pnpm backfill:asset-class`.
+  const assetClassTax =
+    asset?.assetClassTax ??
+    (asset
+      ? inferAssetClassTax({
+          assetType: asset.assetType,
+          subtype: asset.subtype,
+          name: asset.name,
+          ticker: asset.symbol,
+          isin: asset.isin,
+        })
+      : null);
+  const window = washSaleWindowForAssetClass(assetClassTax);
 
   // 2. Replay in chronological order. Wash-sale detection runs INLINE so a
   //    deferred loss lands on the absorbing lot before any later sell consumes

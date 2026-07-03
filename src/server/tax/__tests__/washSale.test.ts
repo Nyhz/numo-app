@@ -16,7 +16,11 @@ import {
   taxWashSaleAdjustments,
 } from "../../../db/schema";
 import { recomputeLotsForAsset } from "../lots";
-import { addCalendarMonths, allocateLargestRemainder } from "../washSale";
+import {
+  addCalendarMonths,
+  allocateLargestRemainder,
+  washSaleWindowForAssetClass,
+} from "../washSale";
 
 const DAY = 86_400_000;
 
@@ -240,6 +244,17 @@ describe("washSale helpers", () => {
     const parts = allocateLargestRemainder(199.99, [3, 2, 5]);
     expect(parts.reduce((s, p) => s + p, 0)).toBeCloseTo(199.99, 9);
     expect(allocateLargestRemainder(0, [1, 2])).toEqual([0, 0]);
+  });
+
+  it("washSaleWindowForAssetClass: 12 meses para no cotizados Y fondos, 2 para el resto", () => {
+    // Auditoría 2026-07: las participaciones de IIC no cotizadas (fondos
+    // tradicionales) NO están admitidas a negociación → art. 43.h: UN AÑO.
+    expect(washSaleWindowForAssetClass("unlisted_security").months).toBe(12);
+    expect(washSaleWindowForAssetClass("fund").months).toBe(12);
+    expect(washSaleWindowForAssetClass("listed_security").months).toBe(2);
+    expect(washSaleWindowForAssetClass("etf").months).toBe(2);
+    expect(washSaleWindowForAssetClass("crypto").months).toBe(2);
+    expect(washSaleWindowForAssetClass(null).months).toBe(2);
   });
 
   it("addCalendarMonths clamps month-end overflow", () => {

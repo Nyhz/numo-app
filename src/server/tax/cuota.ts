@@ -1,6 +1,17 @@
 import { roundEur } from "../../lib/money";
 import { ddiTreatyRate } from "./countries";
 
+/** Intereses de cuentas del ejercicio. Definido aquí (módulo puro, sin DB)
+ *  porque cuota.ts lo consume también el simulador client-side. */
+export type TaxInterest = {
+  /** RCM bruto: neto abonado + retención practicada. */
+  grossEur: number;
+  /** Retención practicada (pago a cuenta) declarada en los movimientos. */
+  withholdingEur: number;
+};
+
+export const ZERO_INTEREST: TaxInterest = { grossEur: 0, withholdingEur: 0 };
+
 /**
  * Escala foral del ahorro (Bizkaia / Gipuzkoa / Álava, armonizada).
  *
@@ -85,6 +96,10 @@ export function applySavingsScale(baseEur: number, scale: SavingsScale): number 
 // anuales de dividendos están exentos. No aplica a dividendos de valores
 // homogéneos comprados en los 2 meses previos al cobro y vendidos en los
 // 2 meses posteriores — esa guarda no se modela aquí (estimación).
+// LIMITACIÓN divulgada (auditoría 2026-07, decisión del Commander: documentar,
+// no modelar): los repartos de IIC (fondos/ETF de distribución) están
+// legalmente EXCLUIDOS de la exención y aquí se incluirían — revisar si algún
+// día la cartera cobra dividendos desde una IIC.
 export const DIVIDEND_EXEMPTION_EUR = 1_500;
 
 /** Subconjunto estructural de TaxReport que necesita la estimación. */
@@ -121,11 +136,17 @@ export type CuotaEstimate = {
   ddiCreditEur: number;
   /** Retenciones ya practicadas en destino (pagos a cuenta). */
   withholdingDestinoEur: number;
-  /** Cuota íntegra − DDI − retenciones destino. Negativo = a devolver. */
+  /** Retención practicada sobre intereses de cuentas (pago a cuenta). */
+  interestWithholdingEur: number;
+  /** Cuota íntegra − DDI − retenciones destino − retención de intereses.
+   *  Negativo = a devolver. */
   resultadoEstimadoEur: number;
 };
 
-export function estimateSavingsCuota(report: CuotaEstimateInput, interestEur = 0): CuotaEstimate {
+export function estimateSavingsCuota(
+  report: CuotaEstimateInput,
+  interest: TaxInterest = ZERO_INTEREST,
+): CuotaEstimate {
   const scale = savingsScaleForYear(report.year);
 
   const saldoGanancias = roundEur(report.totals.netComputableEur);
@@ -133,7 +154,7 @@ export function estimateSavingsCuota(report: CuotaEstimateInput, interestEur = 0
     Math.min(DIVIDEND_EXEMPTION_EUR, Math.max(0, report.totals.dividendsGrossEur)),
   );
   const saldoRcm = roundEur(
-    report.totals.dividendsGrossEur - dividendExemptionApplied + interestEur,
+    report.totals.dividendsGrossEur - dividendExemptionApplied + interest.grossEur,
   );
 
   // Art. 66: compartimentos estancos. El saldo positivo de cada compartimento
@@ -152,7 +173,10 @@ export function estimateSavingsCuota(report: CuotaEstimateInput, interestEur = 0
   const ddiCredit = roundEur(Math.min(ddiUncapped, cuotaIntegra));
 
   const withholdingDestino = roundEur(report.totals.withholdingDestinoTotalEur);
-  const resultado = roundEur(cuotaIntegra - ddiCredit - withholdingDestino);
+  const interestWithholding = roundEur(interest.withholdingEur);
+  const resultado = roundEur(
+    cuotaIntegra - ddiCredit - withholdingDestino - interestWithholding,
+  );
 
   return {
     scaleLabel: scale.label,
@@ -164,6 +188,7 @@ export function estimateSavingsCuota(report: CuotaEstimateInput, interestEur = 0
     cuotaIntegraEur: cuotaIntegra,
     ddiCreditEur: ddiCredit,
     withholdingDestinoEur: withholdingDestino,
+    interestWithholdingEur: interestWithholding,
     resultadoEstimadoEur: resultado,
   };
 }

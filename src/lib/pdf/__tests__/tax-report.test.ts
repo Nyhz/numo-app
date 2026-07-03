@@ -74,7 +74,7 @@ describe("buildTaxReportPdf", () => {
       report: report([], []),
       models: emptyModels,
       sealedAt: null,
-      interestEur: 0,
+      interest: { grossEur: 0, withholdingEur: 0 },
     });
     expect(pdf.byteLength).toBeGreaterThan(500);
     expect(String.fromCharCode(...pdf.slice(0, 5))).toBe("%PDF-");
@@ -90,7 +90,7 @@ describe("buildTaxReportPdf", () => {
       report: report(sales, dividends),
       models: emptyModels,
       sealedAt: Date.UTC(2026, 3, 1),
-      interestEur: 120.5,
+      interest: { grossEur: 120.5, withholdingEur: 22.9 },
     });
     expect(pdf.byteLength).toBeGreaterThan(2000);
   });

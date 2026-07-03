@@ -9,10 +9,15 @@ import type { InformationalModelsStatus } from "./m720";
 export type Snapshot = {
   year: number;
   sealedAt: number;
-  /** `interestEur` frozen at seal time so the sealed PDF's cuota estimate
-   *  never mixes sealed report data with live interest (audit F8). Optional:
-   *  snapshots sealed before the field existed lack it. */
-  payload: { report: TaxReport; contentHash?: string; interestEur?: number } & InformationalModelsStatus;
+  /** `interestEur` (bruto) e `interestWithholdingEur` frozen at seal time so
+   *  the sealed PDF's cuota estimate never mixes sealed report data with live
+   *  interest (audit F8). Optional: older snapshots lack them. */
+  payload: {
+    report: TaxReport;
+    contentHash?: string;
+    interestEur?: number;
+    interestWithholdingEur?: number;
+  } & InformationalModelsStatus;
 };
 
 /**

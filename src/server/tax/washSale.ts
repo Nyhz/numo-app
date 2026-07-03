@@ -21,7 +21,12 @@ export type WashSaleWindow = {
 };
 
 export function washSaleWindowForAssetClass(assetClassTax: string | null): WashSaleWindow {
-  return assetClassTax === "unlisted_security"
+  // Un año para valores NO admitidos a negociación (art. 43.h): además de los
+  // no cotizados obvios, las participaciones de IIC no cotizadas (fondos de
+  // inversión tradicionales, suscripción/reembolso a VL con la gestora) no
+  // están admitidas a negociación — ventana de 12 meses, no 2. Los ETF sí
+  // cotizan y conservan los 2 meses del art. 43.g.
+  return assetClassTax === "unlisted_security" || assetClassTax === "fund"
     ? { months: 12, daysLabel: 365 }
     : { months: 2, daysLabel: 60 };
 }

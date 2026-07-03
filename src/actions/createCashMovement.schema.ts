@@ -30,6 +30,10 @@ export const createCashMovementSchema = z
   /** Broker FX rate in the broker's direction: 1 EUR = X CCY. ALWAYS typed
    *  by hand for non-EUR movements — daily rates only act as a guard. */
   fxEurToCcy: z.number().finite().positive().optional(),
+  /** Retención practicada en EUR — solo para movimientos `interest`: se
+   *  registra el NETO abonado como importe y la retención aquí; el bruto
+   *  fiscal (RCM) es neto + retención y la retención descuenta en cuota. */
+  withholdingTaxEur: z.number().finite().nonnegative().optional(),
   description: z.string().trim().max(500).optional(),
   /** Audit M7: a second identical movement on the same day is flagged as a
    *  duplicate; pass true to record it anyway (salted fingerprint). */
@@ -41,6 +45,10 @@ export const createCashMovementSchema = z
   .refine((d) => d.currency === "EUR" || d.fxEurToCcy != null, {
     path: ["fxEurToCcy"],
     message: "Obligatorio en movimientos no-EUR: introduce el tipo 1 EUR = ? de tu broker.",
+  })
+  .refine((d) => d.withholdingTaxEur == null || d.kind === "interest", {
+    path: ["withholdingTaxEur"],
+    message: "La retención solo aplica a movimientos de interés.",
   });
 
 export type CreateCashMovementInput = z.input<typeof createCashMovementSchema>;

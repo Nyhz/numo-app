@@ -247,12 +247,52 @@ describe("getInterestForYear", () => {
     insertMovement("m4", "deposit", D("2026-01-01"), 1000);
 
     const result = await getInterestForYear(2026, db);
-    expect(result).toBeCloseTo(15, 6);
+    expect(result.grossEur).toBeCloseTo(15, 6);
+    expect(result.withholdingEur).toBe(0);
 
     const other = await getInterestForYear(2025, db);
-    expect(other).toBeCloseTo(999, 6);
+    expect(other.grossEur).toBeCloseTo(999, 6);
 
     const empty = await getInterestForYear(2027, db);
-    expect(empty).toBe(0);
+    expect(empty.grossEur).toBe(0);
+    expect(empty.withholdingEur).toBe(0);
+  });
+
+  it("re-adds the recorded withholding to the gross and reports it as payment on account", async () => {
+    const db = makeDb();
+    db.insert(schema.accounts)
+      .values({ id: "acc_1", name: "B", currency: "EUR", accountType: "savings" })
+      .run();
+    // Bank credits €81 net of the 19% withholding on a €100 gross interest.
+    db.insert(schema.accountCashMovements)
+      .values({
+        id: "int_net",
+        accountId: "acc_1",
+        movementType: "interest",
+        occurredAt: D("2026-04-01"),
+        nativeAmount: 81,
+        currency: "EUR",
+        fxRateToEur: 1,
+        cashImpactEur: 81,
+        withholdingTaxEur: 19,
+      })
+      .run();
+    // A second interest without withholding keeps the previous convention.
+    db.insert(schema.accountCashMovements)
+      .values({
+        id: "int_gross",
+        accountId: "acc_1",
+        movementType: "interest",
+        occurredAt: D("2026-06-01"),
+        nativeAmount: 10,
+        currency: "EUR",
+        fxRateToEur: 1,
+        cashImpactEur: 10,
+      })
+      .run();
+
+    const result = await getInterestForYear(2026, db);
+    expect(result.grossEur).toBeCloseTo(110, 6); // 81 + 19 + 10
+    expect(result.withholdingEur).toBeCloseTo(19, 6);
   });
 });

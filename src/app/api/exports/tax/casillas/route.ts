@@ -13,10 +13,17 @@ export async function GET(req: Request) {
   if (!Number.isFinite(year)) return new NextResponse("year required", { status: 400 });
   const snapshot = getSnapshot(db, year);
   const report = snapshot?.payload.report ?? buildTaxReport(db, year);
-  const interestEur = await getInterestForYear(year, db);
+  // Sealed years use the interest frozen at seal time — same rule as the PDF
+  // (audit F8); before this the CSV could disagree with the sealed PDF.
+  const interest = snapshot
+    ? {
+        grossEur: snapshot.payload.interestEur ?? 0,
+        withholdingEur: snapshot.payload.interestWithholdingEur ?? 0,
+      }
+    : await getInterestForYear(year, db);
   // DDI capped to cuota íntegra — must match the PDF (audit F3).
-  const { cuota } = buildPrevision(report, interestEur);
-  const csv = buildCasillasCsv(report, cuota.ddiCreditEur);
+  const { cuota } = buildPrevision(report, interest);
+  const csv = buildCasillasCsv(report, cuota.ddiCreditEur, interest);
   return new NextResponse(csv, {
     status: 200,
     headers: {

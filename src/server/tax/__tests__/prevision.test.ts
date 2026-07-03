@@ -109,7 +109,7 @@ describe("declaración + previsión (QDVE real-world scenario)", () => {
 
   it("previsión applies the 2026 coefficients to the 2025 lots", () => {
     const report = seedQdve(makeDb());
-    const prevision = buildPrevision(report, 0);
+    const prevision = buildPrevision(report);
     expect(prevision.coefficientsAvailable).toBe(true);
 
     // 2025 acquisitions → coef 1.020.

@@ -9,7 +9,12 @@ import {
   taxLots,
   taxWashSaleAdjustments,
 } from "../../db/schema";
-import { buildYearEndBalances, type YearEndBalance } from "./yearEnd";
+import {
+  buildYearEndBalances,
+  buildYearEndCashBalances,
+  type YearEndBalance,
+  type YearEndCashBalance,
+} from "./yearEnd";
 import { allocateLargestRemainder } from "./washSale";
 
 // Re-exported so existing consumers keep importing from "./report".
@@ -100,6 +105,9 @@ export type TaxReport = {
   declaration?: DeclarationRow[];
   dividends: DividendReportRow[];
   yearEndBalances: YearEndBalance[];
+  /** Efectivo por cuenta a 31-dic (ledger) — alimenta los bloques
+   *  `bank-accounts` del M720. Optional: snapshots antiguos carecen de él. */
+  yearEndCashBalances?: YearEndCashBalance[];
   /** Disposals dropped by the dust filter (audit T7) — disclosed, never silent.
    *  Optional: snapshots sealed before this field existed lack it. */
   excludedSales?: { count: number; proceedsEur: TxEur; costBasisEur: TxEur };
@@ -340,6 +348,7 @@ export function buildTaxReport(db: DB, year: number): TaxReport {
   }
 
   const yearEndBalances: YearEndBalance[] = buildYearEndBalances(db, end);
+  const yearEndCashBalances = buildYearEndCashBalances(db, end);
 
   return {
     year,
@@ -347,6 +356,7 @@ export function buildTaxReport(db: DB, year: number): TaxReport {
     declaration,
     dividends,
     yearEndBalances,
+    yearEndCashBalances,
     excludedSales: {
       count: excluded.count,
       proceedsEur: txEur(excluded.proceedsEur),

@@ -11,6 +11,7 @@ import {
   revalidateAssetMetadata,
 } from "./_shared";
 import { createAssetSchema } from "./createAsset.schema";
+import { inferAssetClassTax } from "../server/tax/classification";
 
 export async function createAsset(
   input: unknown,
@@ -49,6 +50,14 @@ export async function createAsset(
           priceSource: data.priceSource ?? null,
           currency: data.currency,
           isActive: data.isActive,
+          // La clase fiscal decide la ventana antiaplicación (2 vs 12 meses)
+          // y el bloque M720/M721 — nunca puede quedar NULL en un alta nueva.
+          assetClassTax: inferAssetClassTax({
+            assetType: data.assetType,
+            name: data.name,
+            ticker: data.symbol,
+            isin: data.isin ?? null,
+          }),
           createdAt: now,
           updatedAt: now,
         })

@@ -1,0 +1,1 @@
+ALTER TABLE `account_cash_movements` ADD `withholding_tax_eur` real;

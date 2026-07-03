@@ -105,6 +105,10 @@ export async function createCashMovement(
           fxRateToEur: rate,
           fxSource: fx.source,
           cashImpactEur,
+          withholdingTaxEur:
+            data.kind === "interest" && data.withholdingTaxEur
+              ? roundEur(data.withholdingTaxEur)
+              : null,
           rowFingerprint: fingerprint,
           source: "manual",
           description: data.description ?? null,

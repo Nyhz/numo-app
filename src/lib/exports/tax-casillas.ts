@@ -1,4 +1,5 @@
 import type { TaxReport } from "../../server/tax/report";
+import { ZERO_INTEREST, type TaxInterest } from "../../server/tax/interest";
 
 type Row = { casilla: string; label: string; valueEur: number };
 
@@ -11,16 +12,28 @@ type Row = { casilla: string; label: string; valueEur: number };
  * Box numbers are the estado Modelo 100 numbering, kept as orientative
  * labels — the foral form numbering differs.
  */
-export function buildCasillasCsv(report: TaxReport, ddiCreditEur: number): string {
+export function buildCasillasCsv(
+  report: TaxReport,
+  ddiCreditEur: number,
+  interest: TaxInterest = ZERO_INTEREST,
+): string {
   const rows: Row[] = [];
   rows.push({ casilla: "0326", label: "Ganancias patrimoniales (transmisión)", valueEur: report.totals.realizedGainsEur });
   rows.push({ casilla: "0340", label: "Pérdidas computables", valueEur: Math.abs(report.totals.realizedLossesComputableEur) });
   rows.push({ casilla: "0343", label: "Saldo neto ganancias/pérdidas patrimoniales", valueEur: report.totals.netComputableEur });
   rows.push({ casilla: "0027", label: "Rendimientos del capital mobiliario (dividendos gross)", valueEur: report.totals.dividendsGrossEur });
+  if (interest.grossEur !== 0) {
+    // Sin número de casilla propio: el número foral difiere y no se inventa —
+    // la etiqueta identifica el concepto (intereses de cuentas, RCM bruto).
+    rows.push({ casilla: "—", label: "Intereses de cuentas (RCM bruto)", valueEur: interest.grossEur });
+  }
+  // Solo pagos a cuenta ESPAÑOLES: la retención en origen es impuesto
+  // extranjero y se recupera exclusivamente vía DDI (0588) — sumarla aquí
+  // además del 0588 la contaba dos veces (auditoría 2026-07).
   rows.push({
     casilla: "0029",
     label: "Retenciones e ingresos a cuenta",
-    valueEur: report.totals.withholdingOrigenTotalEur + report.totals.withholdingDestinoTotalEur,
+    valueEur: report.totals.withholdingDestinoTotalEur + interest.withholdingEur,
   });
   rows.push({
     casilla: "0588",

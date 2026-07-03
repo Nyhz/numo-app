@@ -18,6 +18,10 @@ export const accountCashMovements = sqliteTable(
     // Provenance of fxRateToEur — see asset_transactions.fxSource.
     fxSource: text("fx_source"),
     cashImpactEur: real("cash_impact_eur").notNull(),
+    // Retención practicada en EUR (solo movimientos `interest`): el banco abona
+    // el neto; el bruto fiscal (RCM) es cashImpactEur + withholdingTaxEur y la
+    // retención cuenta como pago a cuenta en la cuota.
+    withholdingTaxEur: real("withholding_tax_eur"),
     externalReference: text("external_reference"),
     rowFingerprint: text("row_fingerprint"),
     source: text("source").notNull().default("manual"),

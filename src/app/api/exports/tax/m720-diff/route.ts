@@ -15,7 +15,11 @@ export async function GET(req: Request) {
   const report = snapshot?.payload.report ?? buildTaxReport(db, year);
   const models: InformationalModelsStatus = snapshot
     ? snapshot.payload
-    : computeInformationalModelsStatus(db, year, aggregateBlocksFromBalances(report.yearEndBalances));
+    : computeInformationalModelsStatus(
+        db,
+        year,
+        aggregateBlocksFromBalances(report.yearEndBalances, report.yearEndCashBalances ?? []),
+      );
   if (format === "csv") {
     return new NextResponse(buildM720DiffCsv(models), {
       headers: {
