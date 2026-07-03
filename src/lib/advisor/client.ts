@@ -24,6 +24,13 @@ export class AdvisorAuthError extends Error {
   }
 }
 
+export class AdvisorTimeoutError extends Error {
+  constructor(ms: number) {
+    super(`El asesor no respondió en ${Math.round(ms / 1000)} s. Inténtalo de nuevo.`);
+    this.name = "AdvisorTimeoutError";
+  }
+}
+
 export function assertAdvisorEnabled(): void {
   if (process.env.ADVISOR_ENABLED === "false") throw new AdvisorDisabledError();
 }
@@ -52,6 +59,9 @@ export type AdvisorOptions = {
   /** Remote MCP servers (e.g. the MyInvestor catalog) exposed to this call. */
   mcpServers?: Options["mcpServers"];
   maxTurns?: number;
+  /** Hard wall-clock bound: aborts the subprocess and rejects with
+   *  AdvisorTimeoutError. Without it a hung subprocess blocks forever. */
+  timeoutMs?: number;
 };
 
 export type AdvisorUsage = {
@@ -108,28 +118,86 @@ export async function runAdvisorOnce(
   o: AdvisorOptions,
 ): Promise<{ text: string } & AdvisorUsage> {
   assertAdvisorAuth();
-  let text = "";
-  let usage: AdvisorUsage = { ...ZERO_USAGE };
-  for await (const msg of query({ prompt: o.prompt, options: buildOptions(o) })) {
-    if (msg.type === "result") {
-      usage = readResultUsage(msg);
-      if (msg.subtype === "success") text = msg.result;
+  const abort = new AbortController();
+  const options: Options = { ...buildOptions(o), abortController: abort };
+
+  const run = async (): Promise<{ text: string } & AdvisorUsage> => {
+    let text = "";
+    let usage: AdvisorUsage = { ...ZERO_USAGE };
+    for await (const msg of query({ prompt: o.prompt, options })) {
+      if (msg.type === "result") {
+        usage = readResultUsage(msg);
+        if (msg.subtype === "success") text = msg.result;
+      }
     }
+    return { text, ...usage };
+  };
+
+  if (!o.timeoutMs) return run();
+
+  // The race guarantees a bounded wait even if the subprocess ignores the
+  // abort signal; the abort itself tears the subprocess down when it can.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      abort.abort();
+      reject(new AdvisorTimeoutError(o.timeoutMs!));
+    }, o.timeoutMs);
+  });
+  const running = run();
+  try {
+    return await Promise.race([running, timeout]);
+  } finally {
+    clearTimeout(timer);
+    running.catch(() => {}); // the aborted run may reject later; never unhandled
   }
-  return { text, ...usage };
 }
 
 export type StreamChunk =
   | { type: "delta"; text: string }
   | { type: "done"; text: string; usage: AdvisorUsage };
 
-/** Streaming call (chat). Yields text deltas, then a final `done` with usage. */
+/** Streaming call (chat). Yields text deltas, then a final `done` with usage.
+ *  With `timeoutMs`, each step races an overall deadline that aborts the
+ *  subprocess — a hang can no longer keep the SSE open forever. */
 export async function* streamAdvisor(o: AdvisorOptions): AsyncGenerator<StreamChunk> {
   assertAdvisorAuth();
   let acc = "";
   let usage: AdvisorUsage = { ...ZERO_USAGE };
-  const options: Options = { ...buildOptions(o), includePartialMessages: true };
-  for await (const msg of query({ prompt: o.prompt, options })) {
+  const abort = new AbortController();
+  const options: Options = {
+    ...buildOptions(o),
+    includePartialMessages: true,
+    abortController: abort,
+  };
+  const deadline = o.timeoutMs ? Date.now() + o.timeoutMs : null;
+  const it = query({ prompt: o.prompt, options })[Symbol.asyncIterator]();
+
+  const nextStep = async () => {
+    if (!deadline) return it.next();
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      abort.abort();
+      throw new AdvisorTimeoutError(o.timeoutMs!);
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        abort.abort();
+        reject(new AdvisorTimeoutError(o.timeoutMs!));
+      }, remaining);
+    });
+    const step = it.next();
+    try {
+      return await Promise.race([step, timeout]);
+    } finally {
+      clearTimeout(timer);
+      step.catch(() => {}); // the aborted step may reject later; never unhandled
+    }
+  };
+
+  for (let step = await nextStep(); !step.done; step = await nextStep()) {
+    const msg = step.value;
     if (msg.type === "stream_event") {
       // BetaRawMessageStreamEvent — forward only text deltas.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

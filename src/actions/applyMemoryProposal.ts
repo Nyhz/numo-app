@@ -6,11 +6,12 @@ import type { ActionResult } from "../lib/domain";
 import { findProposal, removeProposal } from "../lib/advisor/proposals";
 import {
   MemoryValidationError,
+  PROFILE_MAX_BYTES,
   appendChangelog,
   readProfile,
   writeProfile,
 } from "../lib/advisor/memory";
-import { AdvisorAuthError, runAdvisorOnce } from "../lib/advisor/client";
+import { AdvisorAuthError, AdvisorTimeoutError, runAdvisorOnce } from "../lib/advisor/client";
 import { buildApplyProposalSystem } from "../lib/advisor/prompts";
 import { recordAdvisorRun } from "../lib/advisor/runs";
 
@@ -18,6 +19,10 @@ const schema = z.object({
   id: z.string().min(1),
   decision: z.enum(["confirm", "discard"]),
 });
+
+/** Hard bound on the LLM apply round-trip — a hung subprocess must never leave
+ *  the confirm button spinning forever. */
+const APPLY_TIMEOUT_MS = 120_000;
 
 /** Hybrid policy: confirming an update/remove applies it to the profile via an
  *  LLM edit (validated + atomic); discarding just drops the pending proposal. */
@@ -50,10 +55,11 @@ export async function applyMemoryProposal(
   try {
     const res = await runAdvisorOnce({
       model,
-      systemPrompt: buildApplyProposalSystem(),
+      systemPrompt: buildApplyProposalSystem(PROFILE_MAX_BYTES),
       prompt,
       allowedTools: [],
       maxTurns: 1,
+      timeoutMs: APPLY_TIMEOUT_MS,
     });
     writeProfile(res.text);
     appendChangelog(
@@ -82,9 +88,15 @@ export async function applyMemoryProposal(
       startedAt,
     });
     if (err instanceof MemoryValidationError) {
-      return { ok: false, error: { code: "validation", message: err.message } };
+      return {
+        ok: false,
+        error: {
+          code: "validation",
+          message: `${err.message} Puedes compactar el perfil desde Ajustes y reintentar.`,
+        },
+      };
     }
-    if (err instanceof AdvisorAuthError) {
+    if (err instanceof AdvisorAuthError || err instanceof AdvisorTimeoutError) {
       return { ok: false, error: { code: "db", message: err.message } };
     }
     return { ok: false, error: { code: "db", message: "No se pudo aplicar el cambio." } };

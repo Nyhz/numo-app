@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/src/components/ui/Button";
 import { Markdown } from "@/src/components/ui/Markdown";
+import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { MemoryProposalCard, type Proposal } from "./MemoryProposalCard";
 import { AdvisorConversationTabs } from "./AdvisorConversationTabs";
 import {
@@ -170,7 +171,9 @@ export function AdvisorChat({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       {proposals.length > 0 && (
-        <div className="flex flex-col gap-2">
+        // Capped + scrollable so a burst of proposals can't squeeze the chat
+        // area (the flex-1 sibling below) into nothing.
+        <div className="flex max-h-56 shrink-0 flex-col gap-2 overflow-y-auto">
           {proposals.map((p) => (
             <MemoryProposalCard
               key={p.id}
@@ -212,14 +215,18 @@ export function AdvisorChat({
           >
             {m.role === "assistant" ? (
               m.content ? (
-                <Markdown>{m.content}</Markdown>
+                // Las respuestas citan cifras reales de la cartera: el modo
+                // sensible debe cubrirlas igual que a cualquier KPI.
+                <SensitiveValue as="div">
+                  <Markdown>{m.content}</Markdown>
+                </SensitiveValue>
               ) : (
                 <span className="text-[15px] text-muted-foreground">
                   {busy && i === messages.length - 1 ? "…" : ""}
                 </span>
               )
             ) : (
-              m.content
+              <SensitiveValue as="div">{m.content}</SensitiveValue>
             )}
           </div>
         ))}

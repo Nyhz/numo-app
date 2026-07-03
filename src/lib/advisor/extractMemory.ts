@@ -34,7 +34,13 @@ export async function extractAndApplyMemory(opts: {
   assistantMessage: string;
   model: string;
   now: Date;
-}): Promise<{ added: number; pendingProposals: MemoryProposal[]; usage: AdvisorUsage }> {
+}): Promise<{
+  added: number;
+  /** Adds that could not be written (profile byte budget) — surfaced, never silent. */
+  skippedAdds: number;
+  pendingProposals: MemoryProposal[];
+  usage: AdvisorUsage;
+}> {
   const profile = readProfile();
   const prompt = `Perfil actual:\n${profile || "(vacío)"}\n\nIntercambio:\nUsuario: ${opts.userMessage}\nAsesor: ${opts.assistantMessage}`;
   const res = await runAdvisorOnce({
@@ -43,6 +49,7 @@ export async function extractAndApplyMemory(opts: {
     prompt,
     allowedTools: [],
     maxTurns: 1,
+    timeoutMs: 120_000,
   });
   const { text: _text, ...usage } = res;
   void _text;
@@ -52,15 +59,18 @@ export async function extractAndApplyMemory(opts: {
   const others = ops.filter((o) => o.op !== "add");
 
   let added = 0;
+  let skippedAdds = 0;
   if (adds.length) {
     try {
       writeProfile(applyAdds(profile, adds));
       for (const a of adds) appendChangelog(`add ${a.field}: ${a.value} (${a.reason})`, opts.now);
       added = adds.length;
     } catch {
-      // Profile validation failed (e.g. byte budget) — skip adds, keep previous.
+      // Profile validation failed (e.g. byte budget) — keep the previous
+      // profile, but report the drop so the run summary shows it.
+      skippedAdds = adds.length;
     }
   }
   const pendingProposals = addProposals(others, opts.now);
-  return { added, pendingProposals, usage };
+  return { added, skippedAdds, pendingProposals, usage };
 }

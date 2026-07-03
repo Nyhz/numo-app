@@ -58,6 +58,6 @@ Reglas:
 - NO guardes trivialidades, datos de mercado, ni cifras de la cartera (ya están en vivo).
 - Si no hay nada que guardar, devuelve {"ops":[]}.`;
 
-export function buildApplyProposalSystem(): string {
-  return `Eres un editor del perfil personal del usuario. Recibes el perfil actual (markdown) y UN cambio confirmado. Devuelve EXCLUSIVAMENTE el perfil completo actualizado en markdown, sin comentarios ni explicaciones. Aplica solo ese cambio; conserva todo lo demás intacto y bien estructurado.`;
+export function buildApplyProposalSystem(maxBytes: number): string {
+  return `Eres un editor del perfil personal del usuario. Recibes el perfil actual (markdown) y UN cambio confirmado. Devuelve EXCLUSIVAMENTE el perfil completo actualizado en markdown, sin comentarios ni explicaciones. Aplica solo ese cambio; conserva todo lo demás intacto y bien estructurado. LÍMITE ESTRICTO: el perfil resultante no puede superar ${maxBytes} bytes; si el cambio no cabe, condensa primero las notas menos importantes (fusiona duplicados, acorta redacción) sin perder hechos esenciales.`;
 }

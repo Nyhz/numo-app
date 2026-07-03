@@ -25,10 +25,12 @@ export function MemoryProposalCard({
   onResolved: (id: string) => void;
 }) {
   const [pending, startTransition] = React.useTransition();
+  const [acting, setActing] = React.useState<"confirm" | "discard" | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   function decide(decision: "confirm" | "discard") {
     setError(null);
+    setActing(decision);
     startTransition(async () => {
       const res = await applyMemoryProposal({ id: proposal.id, decision });
       if (res.ok) {
@@ -36,6 +38,7 @@ export function MemoryProposalCard({
       } else {
         setError(res.error.message);
       }
+      setActing(null);
     });
   }
 
@@ -52,11 +55,16 @@ export function MemoryProposalCard({
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={() => decide("confirm")} disabled={pending}>
-          {pending ? "…" : "Confirmar"}
+          {pending && acting === "confirm" ? "Aplicando…" : "Confirmar"}
         </Button>
         <Button size="sm" variant="secondary" onClick={() => decide("discard")} disabled={pending}>
-          Descartar
+          {pending && acting === "discard" ? "…" : "Descartar"}
         </Button>
+        {pending && acting === "confirm" && (
+          <span className="text-xs text-muted-foreground">
+            Reescribiendo el perfil — puede tardar unos segundos.
+          </span>
+        )}
       </div>
     </div>
   );

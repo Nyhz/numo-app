@@ -69,6 +69,9 @@ export async function POST(req: Request): Promise<Response> {
           allowedTools: ["WebSearch", "WebFetch", ...(myInvestor?.allowedTools ?? [])],
           mcpServers: myInvestor?.mcpServers,
           maxTurns: 8,
+          // Un subproceso colgado no puede dejar el SSE abierto y el chat en
+          // busy para siempre (auditoría 2026-07).
+          timeoutMs: 600_000,
         })) {
           if (chunk.type === "delta") {
             send({ type: "delta", text: chunk.text });
@@ -104,7 +107,7 @@ export async function POST(req: Request): Promise<Response> {
             status: "ok",
             model: memoryModel,
             usage: r.usage,
-            summary: `+${r.added} add · ${pending.length} pendientes`,
+            summary: `+${r.added} add${r.skippedAdds ? ` · ${r.skippedAdds} descartados (perfil lleno)` : ""} · ${pending.length} pendientes`,
             startedAt: now.getTime(),
           });
         } catch (err) {

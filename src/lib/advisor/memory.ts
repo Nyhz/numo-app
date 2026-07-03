@@ -10,7 +10,8 @@ import {
 import { dirname } from "node:path";
 import { advisorPaths } from "./paths";
 
-const PROFILE_MAX = Number(process.env.ADVISOR_PROFILE_MAX_BYTES ?? 4096);
+export const PROFILE_MAX_BYTES = Number(process.env.ADVISOR_PROFILE_MAX_BYTES ?? 4096);
+const PROFILE_MAX = PROFILE_MAX_BYTES;
 
 export class MemoryValidationError extends Error {}
 
