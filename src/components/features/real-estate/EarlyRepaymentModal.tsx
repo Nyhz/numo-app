@@ -7,7 +7,7 @@ import { Button } from "@/src/components/ui/Button";
 import { Modal } from "@/src/components/ui/Modal";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur } from "@/src/lib/format";
-import { buildSchedule, nextPaymentAfter, summarizeSchedule } from "@/src/lib/mortgage";
+import { buildSchedule, nextPaymentAfter, outstandingAt, summarizeSchedule } from "@/src/lib/mortgage";
 import type { PropertySummary } from "@/src/server/realEstate";
 import { scheduleEventsOf, termsOf } from "./mortgageClient";
 
@@ -33,8 +33,18 @@ export function EarlyRepaymentModal({
 
   const terms = termsOf(summary);
   const amountEur = Number(amount);
+  const existingSchedule = terms ? buildSchedule(terms, scheduleEventsOf(summary)) : [];
+  const beforeFirstPayment = !!(
+    terms &&
+    date &&
+    summary.mortgage &&
+    date < summary.mortgage.firstPaymentDate
+  );
+  const pendingAtDate =
+    terms && date && !beforeFirstPayment ? outstandingAt(terms, existingSchedule, date) : 0;
   let preview: string | null = null;
-  if (terms && date && amountEur > 0 && amountEur < summary.outstandingEur) {
+  let previewNote: string | null = null;
+  if (terms && date && !beforeFirstPayment && amountEur > 0 && amountEur < pendingAtDate) {
     const hypothetical = buildSchedule(terms, [
       ...scheduleEventsOf(summary),
       { type: "early_repayment", eventDate: date, amountEur, mode },
@@ -44,6 +54,10 @@ export function EarlyRepaymentModal({
       mode === "reduce_term"
         ? `Misma cuota; el préstamo terminaría el ${s.endDate ?? "—"} (intereses totales ${formatEur(s.totalInterestEur)}).`
         : `Nueva cuota: ${formatEur(nextPaymentAfter(hypothetical, date)?.paymentEur ?? 0)} /mes; mismo vencimiento (${s.endDate ?? "—"}).`;
+  } else if (beforeFirstPayment) {
+    previewNote = "La fecha es anterior a la primera cuota.";
+  } else if (date && amountEur > 0 && amountEur >= pendingAtDate) {
+    previewNote = "El importe iguala o supera el capital pendiente a esa fecha.";
   }
 
   function submit(e: React.FormEvent) {
@@ -128,6 +142,8 @@ export function EarlyRepaymentModal({
           <p className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm">
             <SensitiveValue>{preview}</SensitiveValue>
           </p>
+        ) : previewNote ? (
+          <p className="text-sm text-muted-foreground">{previewNote}</p>
         ) : null}
         <div className="flex items-center justify-end gap-2 pt-2">
           <Button

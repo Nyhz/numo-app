@@ -32,8 +32,14 @@ export function RateChangeModal({
 
   const terms = termsOf(summary);
   const newRatePct = Number(rate);
+  const beforeFirstPayment = !!(
+    terms &&
+    date &&
+    summary.mortgage &&
+    date < summary.mortgage.firstPaymentDate
+  );
   let preview: string | null = null;
-  if (terms && date && newRatePct >= 0 && rate !== "") {
+  if (terms && date && !beforeFirstPayment && newRatePct >= 0 && rate !== "") {
     const hypothetical = buildSchedule(terms, [
       ...scheduleEventsOf(summary),
       { type: "rate_change", eventDate: date, newRatePct },
