@@ -1,26 +1,44 @@
 import { NextResponse } from "next/server";
 import { getStatementReport } from "@/src/server/statement";
 import { getNetWorthSeries } from "@/src/server/overview";
+import { parseAsOfParam } from "@/src/lib/asof";
 import { buildStatementCsv } from "@/src/lib/exports/statement-csv";
+import { buildStatementMd } from "@/src/lib/exports/statement-md";
 import { buildStatementXlsx } from "@/src/lib/exports/statement-xlsx";
 import { buildStatementReportPdf } from "@/src/lib/pdf/statement-report";
 
-const FORMATS = new Set(["pdf", "xlsx", "csv"]);
+const FORMATS = new Set(["pdf", "xlsx", "csv", "md"]);
 
 export async function GET(req: Request) {
-  const format = new URL(req.url).searchParams.get("format") ?? "pdf";
+  const params = new URL(req.url).searchParams;
+  const format = params.get("format") ?? "pdf";
   if (!FORMATS.has(format)) {
-    return new NextResponse("format must be pdf, xlsx or csv", { status: 400 });
+    return new NextResponse("format must be pdf, xlsx, csv or md", { status: 400 });
+  }
+  const asOfParse = parseAsOfParam(params.get("asOf"));
+  if (!asOfParse.ok) {
+    return new NextResponse(asOfParse.error, { status: 400 });
   }
 
-  const report = await getStatementReport();
-  const stamp = new Date(report.generatedAt).toISOString().slice(0, 10);
+  const report = await getStatementReport(undefined, {
+    asOf: asOfParse.asOf ?? undefined,
+  });
+  const stamp = report.asOf ?? new Date(report.generatedAt).toISOString().slice(0, 10);
 
   if (format === "csv") {
     return new NextResponse(buildStatementCsv(report), {
       headers: {
         "content-type": "text/csv; charset=utf-8",
         "content-disposition": `attachment; filename="statement-${stamp}.csv"`,
+      },
+    });
+  }
+
+  if (format === "md") {
+    return new NextResponse(buildStatementMd(report), {
+      headers: {
+        "content-type": "text/markdown; charset=utf-8",
+        "content-disposition": `attachment; filename="statement-${stamp}.md"`,
       },
     });
   }
@@ -36,8 +54,12 @@ export async function GET(req: Request) {
     });
   }
 
-  // Serie de evolución para el gráfico de área de la primera página.
-  const series = await getNetWorthSeries({ range: "ALL", accountIds: [] });
+  // Serie de evolución para el gráfico de área de la primera página; con
+  // asOf se recorta al corte para no dibujar futuro respecto al extracto.
+  const seriesAll = await getNetWorthSeries({ range: "ALL", accountIds: [] });
+  const series = report.asOf
+    ? seriesAll.filter((p) => p.date <= report.asOf!)
+    : seriesAll;
   const pdf = buildStatementReportPdf(report, {
     series: series.map((p) => ({ date: p.date, valueEur: p.valueEur })),
   });
