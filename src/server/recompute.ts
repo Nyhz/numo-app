@@ -11,29 +11,29 @@ import { round, roundEur } from "../lib/money";
 
 import type { Tx } from "../db/client";
 
-/**
- * Recompute the (global) asset_positions row by walking every asset_transactions
- * row for the asset in chronological order. The position row is scoped by
- * asset in the schema; `accountId` is accepted for call-site clarity but the
- * aggregation spans all accounts that hold the asset.
- *
- * Cost basis uses a running weighted-average: buys add `qty * unitPrice +
- * fees` to the pool; sells reduce the pool proportionally by the sold
- * fraction, leaving the average untouched. When quantity collapses to zero,
- * the position row is deleted so empty positions don't drift.
- */
-export function recomputeAssetPosition(
-  tx: Tx,
-  _accountId: string,
-  assetId: string,
-): void {
-  const rows = tx
-    .select()
-    .from(assetTransactions)
-    .where(eq(assetTransactions.assetId, assetId))
-    .orderBy(asc(assetTransactions.tradedAt), asc(assetTransactions.id))
-    .all();
+export type LedgerTrade = {
+  transactionType: string;
+  quantity: number;
+  tradeGrossAmount: number;
+  tradeGrossAmountEur: number;
+  feesAmount: number;
+  feesAmountEur: number;
+  fxRateToEur: number;
+};
 
+export type LedgerFold = {
+  /** Cantidad tras el replay, redondeada a 10dp. ≤ 0 ⇒ posición cerrada. */
+  qty: number;
+  totalCostNative: number;
+  totalCostEur: number;
+};
+
+/**
+ * Replay de coste medio ponderado sobre filas de asset_transactions en orden
+ * cronológico. Única fuente de verdad de la matemática de coste: la consumen
+ * el recompute de escritura y la lectura as-of del extracto.
+ */
+export function foldLedger(rows: LedgerTrade[]): LedgerFold {
   let qty = 0;
   let totalCostNative = 0;
   let totalCostEur = 0;
@@ -63,7 +63,33 @@ export function recomputeAssetPosition(
     // cash impact is captured on the paired cash_movement.
   }
 
-  qty = round(qty, 10);
+  return { qty: round(qty, 10), totalCostNative, totalCostEur };
+}
+
+/**
+ * Recompute the (global) asset_positions row by walking every asset_transactions
+ * row for the asset in chronological order. The position row is scoped by
+ * asset in the schema; `accountId` is accepted for call-site clarity but the
+ * aggregation spans all accounts that hold the asset.
+ *
+ * Cost basis uses a running weighted-average: buys add `qty * unitPrice +
+ * fees` to the pool; sells reduce the pool proportionally by the sold
+ * fraction, leaving the average untouched. When quantity collapses to zero,
+ * the position row is deleted so empty positions don't drift.
+ */
+export function recomputeAssetPosition(
+  tx: Tx,
+  _accountId: string,
+  assetId: string,
+): void {
+  const rows = tx
+    .select()
+    .from(assetTransactions)
+    .where(eq(assetTransactions.assetId, assetId))
+    .orderBy(asc(assetTransactions.tradedAt), asc(assetTransactions.id))
+    .all();
+
+  const { qty, totalCostNative, totalCostEur } = foldLedger(rows);
 
   if (qty <= 0) {
     tx.delete(assetPositions).where(eq(assetPositions.assetId, assetId)).run();
