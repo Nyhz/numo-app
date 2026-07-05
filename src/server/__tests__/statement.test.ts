@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import Database from "better-sqlite3";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -44,12 +45,18 @@ function seedPosition(db: DB, assetId: string, quantity: number, totalCostEur: n
     .run();
 }
 
-function seedValuation(db: DB, assetId: string, quantity: number, unitPriceEur: number): void {
+function seedValuation(
+  db: DB,
+  assetId: string,
+  quantity: number,
+  unitPriceEur: number,
+  valuationDate = "2026-06-08",
+): void {
   db.insert(schema.assetValuations)
     .values({
       id: ulid(),
       assetId,
-      valuationDate: "2026-06-08",
+      valuationDate,
       quantity,
       unitPriceEur,
       marketValueEur: quantity * unitPriceEur,
@@ -58,16 +65,22 @@ function seedValuation(db: DB, assetId: string, quantity: number, unitPriceEur: 
     .run();
 }
 
-function seedBuy(db: DB, accountId: string, assetId: string, grossEur: number): void {
+function seedBuy(
+  db: DB,
+  accountId: string,
+  assetId: string,
+  grossEur: number,
+  opts: { tradedAt?: number; quantity?: number } = {},
+): void {
   db.insert(schema.assetTransactions)
     .values({
       id: ulid(),
       accountId,
       assetId,
       transactionType: "buy",
-      tradedAt: Date.UTC(2026, 0, 5, 12),
-      quantity: 1,
-      unitPrice: grossEur,
+      tradedAt: opts.tradedAt ?? Date.UTC(2026, 0, 5, 12),
+      quantity: opts.quantity ?? 1,
+      unitPrice: grossEur / (opts.quantity ?? 1),
       tradeCurrency: "EUR",
       fxRateToEur: 1,
       tradeGrossAmount: grossEur,
@@ -76,6 +89,58 @@ function seedBuy(db: DB, accountId: string, assetId: string, grossEur: number): 
       feesAmount: 0,
       feesAmountEur: 0,
       netAmountEur: -grossEur,
+      rowFingerprint: ulid(),
+    })
+    .run();
+}
+
+function seedSell(
+  db: DB,
+  accountId: string,
+  assetId: string,
+  quantity: number,
+  grossEur: number,
+  tradedAt: number,
+): void {
+  db.insert(schema.assetTransactions)
+    .values({
+      id: ulid(),
+      accountId,
+      assetId,
+      transactionType: "sell",
+      tradedAt,
+      quantity,
+      unitPrice: grossEur / quantity,
+      tradeCurrency: "EUR",
+      fxRateToEur: 1,
+      tradeGrossAmount: grossEur,
+      tradeGrossAmountEur: grossEur,
+      cashImpactEur: grossEur,
+      feesAmount: 0,
+      feesAmountEur: 0,
+      netAmountEur: grossEur,
+      rowFingerprint: ulid(),
+    })
+    .run();
+}
+
+function seedCashMovement(
+  db: DB,
+  accountId: string,
+  amountEur: number,
+  occurredAt: number,
+): void {
+  db.insert(schema.accountCashMovements)
+    .values({
+      id: ulid(),
+      accountId,
+      movementType: amountEur >= 0 ? "deposit" : "withdrawal",
+      occurredAt,
+      nativeAmount: amountEur,
+      currency: "EUR",
+      fxRateToEur: 1,
+      cashImpactEur: amountEur,
+      affectsCashBalance: true,
       rowFingerprint: ulid(),
     })
     .run();
@@ -155,5 +220,109 @@ describe("getStatementReport", () => {
     // No valued cost — pct must be null, not divide-by-zero garbage.
     expect(report.totals.unrealizedPnlPct).toBeNull();
     expect(report.totals.investedCostEur).toBeCloseTo(750);
+  });
+});
+
+describe("getStatementReport as-of", () => {
+  let db: DB;
+  beforeEach(() => {
+    db = makeDb();
+  });
+
+  const JAN10 = Date.UTC(2026, 0, 10, 12);
+  const MAR01 = Date.UTC(2026, 2, 1, 12);
+  const MAY01 = Date.UTC(2026, 4, 1, 12);
+
+  it("una compra posterior al corte no cuenta (cantidad ni coste)", async () => {
+    const broker = seedAccount(db, "Degiro", "broker");
+    const etf = seedAsset(db, "MSCI World", "etf");
+    seedBuy(db, broker, etf, 1000, { tradedAt: JAN10, quantity: 10 });
+    seedBuy(db, broker, etf, 500, { tradedAt: MAY01, quantity: 5 });
+    seedValuation(db, etf, 10, 110, "2026-02-27");
+
+    const report = await getStatementReport(db, { asOf: "2026-03-31" });
+    expect(report.asOf).toBe("2026-03-31");
+    const line = report.groups[0].lines[0];
+    expect(line.quantity).toBe(10);
+    expect(line.costEur).toBeCloseTo(1000);
+    expect(line.marketValueEur).toBeCloseTo(10 * 110);
+  });
+
+  it("usa la última valoración ≤ fecha, nunca una posterior", async () => {
+    const broker = seedAccount(db, "Degiro", "broker");
+    const etf = seedAsset(db, "MSCI World", "etf");
+    seedBuy(db, broker, etf, 1000, { tradedAt: JAN10, quantity: 10 });
+    seedValuation(db, etf, 10, 105, "2026-03-20");
+    seedValuation(db, etf, 10, 130, "2026-04-15");
+
+    const report = await getStatementReport(db, { asOf: "2026-03-31" });
+    const line = report.groups[0].lines[0];
+    expect(line.unitPriceEur).toBeCloseTo(105);
+    expect(line.valuationDate).toBe("2026-03-20");
+    expect(report.totals.investedMarketValueEur).toBeCloseTo(1050);
+  });
+
+  it("una venta parcial antes del corte reduce cantidad y coste proporcionalmente", async () => {
+    const broker = seedAccount(db, "Degiro", "broker");
+    const etf = seedAsset(db, "MSCI World", "etf");
+    seedBuy(db, broker, etf, 1000, { tradedAt: JAN10, quantity: 10 });
+    seedSell(db, broker, etf, 4, 480, MAR01);
+    seedValuation(db, etf, 6, 120, "2026-03-30");
+
+    const report = await getStatementReport(db, { asOf: "2026-03-31" });
+    const line = report.groups[0].lines[0];
+    expect(line.quantity).toBe(6);
+    expect(line.costEur).toBeCloseTo(600);
+  });
+
+  it("posición cerrada a la fecha no aparece; abierta a la fecha y cerrada hoy sí", async () => {
+    const broker = seedAccount(db, "Degiro", "broker");
+    const etf = seedAsset(db, "MSCI World", "etf");
+    seedBuy(db, broker, etf, 1000, { tradedAt: JAN10, quantity: 10 });
+    seedSell(db, broker, etf, 10, 1200, MAY01); // cerrada en mayo
+    seedValuation(db, etf, 10, 110, "2026-03-30");
+
+    const march = await getStatementReport(db, { asOf: "2026-03-31" });
+    expect(march.totals.positionsCount).toBe(1);
+
+    const june = await getStatementReport(db, { asOf: "2026-06-30" });
+    expect(june.totals.positionsCount).toBe(0);
+  });
+
+  it("el efectivo se acota por occurredAt", async () => {
+    const savings = seedAccount(db, "MyInvestor", "savings");
+    seedCashMovement(db, savings, 1000, JAN10);
+    seedCashMovement(db, savings, 500, MAY01);
+
+    const report = await getStatementReport(db, { asOf: "2026-03-31" });
+    const account = report.accounts.find((a) => a.name === "MyInvestor");
+    expect(account?.cashEur).toBeCloseTo(1000);
+    expect(report.totals.cashEur).toBeCloseTo(1000);
+  });
+
+  it("asOf = hoy coincide con el informe sin asOf", async () => {
+    const broker = seedAccount(db, "Degiro", "broker");
+    const savings = seedAccount(db, "MyInvestor", "savings");
+    const etf = seedAsset(db, "MSCI World", "etf");
+    seedBuy(db, broker, etf, 1000, { tradedAt: JAN10, quantity: 10 });
+    seedPosition(db, etf, 10, 1000); // camino actual lee asset_positions
+    seedValuation(db, etf, 10, 120, "2026-06-08");
+    seedCashMovement(db, savings, 500, JAN10);
+    // El camino actual lee accounts.currentCashBalanceEur materializado.
+    db.update(schema.accounts)
+      .set({ currentCashBalanceEur: 500 })
+      .where(eq(schema.accounts.id, savings))
+      .run();
+
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const live = await getStatementReport(db);
+    const asOf = await getStatementReport(db, { asOf: todayIso });
+
+    expect(asOf.totals).toEqual({ ...live.totals });
+    expect(asOf.accounts.map((a) => [a.name, a.cashEur, a.investedEur])).toEqual(
+      live.accounts.map((a) => [a.name, a.cashEur, a.investedEur]),
+    );
+    expect(live.asOf).toBeNull();
   });
 });

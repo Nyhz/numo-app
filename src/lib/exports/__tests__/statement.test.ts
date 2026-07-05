@@ -6,6 +6,7 @@ import { buildStatementReportPdf } from "../../pdf/statement-report";
 
 const sample = (): StatementReport => ({
   generatedAt: Date.UTC(2026, 5, 9, 10, 30),
+  asOf: null,
   totals: {
     investedMarketValueEur: 1700,
     investedCostEur: 1600,

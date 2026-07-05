@@ -1,8 +1,19 @@
-import { max } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, max, or, sql } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
-import { assetTransactions } from "../db/schema";
+import {
+  accountCashMovements,
+  accounts,
+  assets,
+  assetTransactions,
+  assetValuations,
+  type Asset,
+  type AssetValuation,
+} from "../db/schema";
+import { isCashBearingAccount } from "../lib/domain";
+import { round, roundEur } from "../lib/money";
+import { foldLedger } from "./recompute";
 import { listAccounts } from "./accounts";
-import { listPositions, type PositionRow } from "./positions";
+import { listPositions } from "./positions";
 
 export type StatementAssetLine = {
   assetId: string;
@@ -54,24 +65,35 @@ export type StatementTotals = {
 
 export type StatementReport = {
   generatedAt: number;
+  /** Fecha de corte ISO cuando el extracto es reconstruido; null = actual. */
+  asOf: string | null;
   totals: StatementTotals;
   groups: StatementGroup[];
   accounts: StatementAccountLine[];
 };
 
-function toLine(row: PositionRow, totalMarketValueEur: number): StatementAssetLine {
-  const marketValueEur = row.valuationEur;
-  const costEur = row.position.totalCostEur;
+type LineInput = {
+  asset: Asset;
+  quantity: number;
+  costEur: number;
+  unitPriceEur: number | null;
+  valuationDate: string | null;
+};
+
+function toLine(input: LineInput, totalMarketValueEur: number): StatementAssetLine {
+  const marketValueEur =
+    input.unitPriceEur != null ? input.quantity * input.unitPriceEur : null;
+  const costEur = input.costEur;
   const pnlEur = marketValueEur != null ? marketValueEur - costEur : null;
   return {
-    assetId: row.asset.id,
-    name: row.asset.name,
-    assetType: row.asset.assetType,
-    symbol: row.asset.ticker ?? row.asset.symbol,
-    isin: row.asset.isin,
-    currency: row.asset.currency,
-    quantity: row.position.quantity,
-    unitPriceEur: row.valuation?.unitPriceEur ?? null,
+    assetId: input.asset.id,
+    name: input.asset.name,
+    assetType: input.asset.assetType,
+    symbol: input.asset.ticker ?? input.asset.symbol,
+    isin: input.asset.isin,
+    currency: input.asset.currency,
+    quantity: input.quantity,
+    unitPriceEur: input.unitPriceEur,
     marketValueEur,
     costEur,
     pnlEur,
@@ -80,7 +102,7 @@ function toLine(row: PositionRow, totalMarketValueEur: number): StatementAssetLi
       marketValueEur != null && totalMarketValueEur > 0
         ? marketValueEur / totalMarketValueEur
         : null,
-    valuationDate: row.valuation?.valuationDate ?? null,
+    valuationDate: input.valuationDate,
   };
 }
 
@@ -127,43 +149,27 @@ function primaryAccountByAsset(db: DB): Map<string, string> {
   return new Map(rows.map((r) => [r.assetId, r.accountId]));
 }
 
-export async function getStatementReport(db: DB = defaultDb): Promise<StatementReport> {
-  const [positions, accountsList] = await Promise.all([
-    listPositions(db),
-    listAccounts(db),
-  ]);
-  const assetAccount = primaryAccountByAsset(db);
+type AssemblyInput = {
+  asOf: string | null;
+  lines: LineInput[]; // solo posiciones abiertas (quantity > 0)
+  accounts: Array<Omit<StatementAccountLine, "investedEur" | "totalEur">>;
+  investedByAccount: Map<string, number>;
+};
 
-  const open = positions.filter((row) => row.position.quantity > 0);
-  const investedMarketValueEur = open.reduce(
-    (acc, row) => acc + (row.valuationEur ?? 0),
+/** Tramo común a ambos caminos (actual y as-of): misma matemática de líneas,
+ *  grupos y totales ⇒ paridad al céntimo garantizada por construcción. */
+function assembleReport(input: AssemblyInput): StatementReport {
+  const investedMarketValueEur = input.lines.reduce(
+    (acc, l) => acc + (l.unitPriceEur != null ? l.quantity * l.unitPriceEur : 0),
     0,
   );
-  const lines = open.map((row) => toLine(row, investedMarketValueEur));
+  const lines = input.lines.map((l) => toLine(l, investedMarketValueEur));
   const groups = groupAssetLines(lines, investedMarketValueEur);
 
-  const investedByAccount = new Map<string, number>();
-  for (const row of open) {
-    const accountId = assetAccount.get(row.position.assetId);
-    if (!accountId || row.valuationEur == null) continue;
-    investedByAccount.set(
-      accountId,
-      (investedByAccount.get(accountId) ?? 0) + row.valuationEur,
-    );
-  }
-
-  const accounts: StatementAccountLine[] = accountsList
+  const accounts: StatementAccountLine[] = input.accounts
     .map((account) => {
-      const investedEur = investedByAccount.get(account.id) ?? 0;
-      return {
-        accountId: account.id,
-        name: account.name,
-        accountType: account.accountType,
-        currency: account.currency,
-        cashEur: account.totalBalanceEur,
-        investedEur,
-        totalEur: account.totalBalanceEur + investedEur,
-      };
+      const investedEur = input.investedByAccount.get(account.accountId) ?? 0;
+      return { ...account, investedEur, totalEur: account.cashEur + investedEur };
     })
     .sort((a, b) => b.totalEur - a.totalEur);
 
@@ -179,6 +185,7 @@ export async function getStatementReport(db: DB = defaultDb): Promise<StatementR
 
   return {
     generatedAt: Date.now(),
+    asOf: input.asOf,
     totals: {
       investedMarketValueEur,
       investedCostEur,
@@ -192,4 +199,193 @@ export async function getStatementReport(db: DB = defaultDb): Promise<StatementR
     groups,
     accounts,
   };
+}
+
+export async function getStatementReport(
+  db: DB = defaultDb,
+  opts: { asOf?: string } = {},
+): Promise<StatementReport> {
+  if (opts.asOf) return statementReportAsOf(opts.asOf, db);
+
+  const [positions, accountsList] = await Promise.all([
+    listPositions(db),
+    listAccounts(db),
+  ]);
+  const assetAccount = primaryAccountByAsset(db);
+
+  const open = positions.filter((row) => row.position.quantity > 0);
+  const lineInputs: LineInput[] = open.map((row) => ({
+    asset: row.asset,
+    quantity: row.position.quantity,
+    costEur: row.position.totalCostEur,
+    unitPriceEur: row.valuation?.unitPriceEur ?? null,
+    valuationDate: row.valuation?.valuationDate ?? null,
+  }));
+
+  const investedByAccount = new Map<string, number>();
+  for (const row of open) {
+    const accountId = assetAccount.get(row.position.assetId);
+    if (!accountId || row.valuationEur == null) continue;
+    investedByAccount.set(
+      accountId,
+      (investedByAccount.get(accountId) ?? 0) + row.valuationEur,
+    );
+  }
+
+  return assembleReport({
+    asOf: null,
+    lines: lineInputs,
+    accounts: accountsList.map((a) => ({
+      accountId: a.id,
+      name: a.name,
+      accountType: a.accountType,
+      currency: a.currency,
+      cashEur: a.totalBalanceEur,
+    })),
+    investedByAccount,
+  });
+}
+
+/** Última valoración ≤ asOf por activo, mismo patrón de dos queries que
+ *  latestValuationsFor en positions.ts pero acotado en fecha. */
+async function valuationsAsOf(
+  assetIds: string[],
+  asOf: string,
+  db: DB,
+): Promise<Map<string, AssetValuation>> {
+  if (assetIds.length === 0) return new Map();
+  const latest = await db
+    .select({
+      assetId: assetValuations.assetId,
+      latestDate: max(assetValuations.valuationDate),
+    })
+    .from(assetValuations)
+    .where(
+      and(
+        inArray(assetValuations.assetId, assetIds),
+        lte(assetValuations.valuationDate, asOf),
+      ),
+    )
+    .groupBy(assetValuations.assetId)
+    .all();
+  const pairs = latest.filter(
+    (r): r is { assetId: string; latestDate: string } => r.latestDate != null,
+  );
+  if (pairs.length === 0) return new Map();
+  const rows = await db
+    .select()
+    .from(assetValuations)
+    .where(
+      or(
+        ...pairs.map((pair) =>
+          and(
+            eq(assetValuations.assetId, pair.assetId),
+            eq(assetValuations.valuationDate, pair.latestDate),
+          ),
+        ),
+      ),
+    )
+    .all();
+  return new Map(rows.map((v) => [v.assetId, v]));
+}
+
+/**
+ * Extracto reconstruido a fin de día LOCAL de `asOf`: replay del ledger para
+ * cantidades y coste (misma media ponderada que recomputeAssetPosition, vía
+ * foldLedger), última valoración ≤ asOf como precio, y efectivo =
+ * openingBalance + Σ movimientos ≤ corte (recomputeAccountCashBalance acotado).
+ */
+async function statementReportAsOf(asOf: string, db: DB): Promise<StatementReport> {
+  const cutoffMs = new Date(`${asOf}T23:59:59.999`).getTime();
+
+  const trades = await db
+    .select()
+    .from(assetTransactions)
+    .where(lte(assetTransactions.tradedAt, cutoffMs))
+    .orderBy(asc(assetTransactions.tradedAt), asc(assetTransactions.id))
+    .all();
+
+  const tradesByAsset = new Map<string, typeof trades>();
+  const lastAccountByAsset = new Map<string, string>();
+  const tradedAccountIds = new Set<string>();
+  for (const t of trades) {
+    const bucket = tradesByAsset.get(t.assetId) ?? [];
+    bucket.push(t);
+    tradesByAsset.set(t.assetId, bucket);
+    lastAccountByAsset.set(t.assetId, t.accountId); // cronológico → gana el último
+    tradedAccountIds.add(t.accountId);
+  }
+
+  const held: Array<{ assetId: string; quantity: number; costEur: number }> = [];
+  for (const [assetId, rows] of tradesByAsset) {
+    const fold = foldLedger(rows);
+    if (fold.qty <= 0) continue;
+    // Mismo redondeo que persiste recomputeAssetPosition → paridad al céntimo.
+    held.push({ assetId, quantity: fold.qty, costEur: round(fold.totalCostEur) });
+  }
+
+  const heldIds = held.map((h) => h.assetId);
+  const [assetRows, valuationByAsset] = await Promise.all([
+    heldIds.length > 0
+      ? db.select().from(assets).where(inArray(assets.id, heldIds)).all()
+      : Promise.resolve([] as Asset[]),
+    valuationsAsOf(heldIds, asOf, db),
+  ]);
+  const assetById = new Map(assetRows.map((a) => [a.id, a]));
+
+  const lineInputs: LineInput[] = [];
+  const investedByAccount = new Map<string, number>();
+  for (const h of held) {
+    const asset = assetById.get(h.assetId);
+    if (!asset) continue;
+    const valuation = valuationByAsset.get(h.assetId) ?? null;
+    lineInputs.push({
+      asset,
+      quantity: h.quantity,
+      costEur: h.costEur,
+      unitPriceEur: valuation?.unitPriceEur ?? null,
+      valuationDate: valuation?.valuationDate ?? null,
+    });
+    const accountId = lastAccountByAsset.get(h.assetId);
+    if (!accountId || valuation == null) continue;
+    investedByAccount.set(
+      accountId,
+      (investedByAccount.get(accountId) ?? 0) + h.quantity * valuation.unitPriceEur,
+    );
+  }
+
+  const movementSums = await db
+    .select({
+      accountId: accountCashMovements.accountId,
+      total: sql<number>`coalesce(sum(case when ${accountCashMovements.affectsCashBalance} = 1 then ${accountCashMovements.cashImpactEur} else 0 end), 0)`,
+    })
+    .from(accountCashMovements)
+    .where(lte(accountCashMovements.occurredAt, cutoffMs))
+    .groupBy(accountCashMovements.accountId)
+    .all();
+  const sumByAccount = new Map(movementSums.map((r) => [r.accountId, r.total]));
+
+  const accountRows = await db.select().from(accounts).orderBy(asc(accounts.name)).all();
+  const accountLines = accountRows
+    // Existía a la fecha, o tiene actividad ≤ corte (cubre backfills con
+    // createdAt posterior a los hechos).
+    .filter(
+      (a) => a.createdAt <= cutoffMs || sumByAccount.has(a.id) || tradedAccountIds.has(a.id),
+    )
+    .map((a) => ({
+      accountId: a.id,
+      name: a.name,
+      accountType: a.accountType,
+      currency: a.currency,
+      cashEur: isCashBearingAccount(a.accountType)
+        ? roundEur(a.openingBalanceEur + (sumByAccount.get(a.id) ?? 0))
+        : 0,
+    }));
+
+  return assembleReport({
+    asOf,
+    lines: lineInputs,
+    accounts: accountLines,
+    investedByAccount,
+  });
 }
