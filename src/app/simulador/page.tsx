@@ -18,7 +18,10 @@ export default async function SimuladorPage() {
       </header>
 
       <SimulatorPanel
-        initialCapitalEur={kpis.totalNetWorthEur}
+        // FIRE se calcula solo sobre capital invertible: la vivienda habitual
+        // no genera rentas ni se liquida para vivir, así que se excluye el
+        // equity inmobiliario del prerrelleno (patrimonio − inmuebles).
+        initialCapitalEur={kpis.totalNetWorthEur - kpis.realEstateEquityEur}
         baseYear={baseYear}
       />
     </div>
