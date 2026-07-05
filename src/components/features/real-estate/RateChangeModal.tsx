@@ -1,8 +1,19 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import * as React from "react";
+import { addMortgageEvent } from "@/src/actions/realEstate";
+import { Button } from "@/src/components/ui/Button";
+import { Modal } from "@/src/components/ui/Modal";
+import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
+import { formatEur } from "@/src/lib/format";
+import { buildSchedule, nextPaymentAfter } from "@/src/lib/mortgage";
 import type { PropertySummary } from "@/src/server/realEstate";
+import { scheduleEventsOf, termsOf } from "./mortgageClient";
 
-// STUB — Task 11 lo reemplaza por el modal real de revisión de tipo.
+const inputClass =
+  "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary";
+
 export function RateChangeModal({
   summary,
   open,
@@ -12,5 +23,110 @@ export function RateChangeModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  return null;
+  const router = useRouter();
+  const [date, setDate] = React.useState("");
+  const [rate, setRate] = React.useState("");
+  const [note, setNote] = React.useState("");
+  const [banner, setBanner] = React.useState<string | null>(null);
+  const [pending, startTransition] = React.useTransition();
+
+  const terms = termsOf(summary);
+  const newRatePct = Number(rate);
+  let preview: string | null = null;
+  if (terms && date && newRatePct >= 0 && rate !== "") {
+    const hypothetical = buildSchedule(terms, [
+      ...scheduleEventsOf(summary),
+      { type: "rate_change", eventDate: date, newRatePct },
+    ]);
+    const next = nextPaymentAfter(hypothetical, date);
+    if (next) preview = `Nueva cuota desde ${next.date}: ${formatEur(next.paymentEur)} /mes.`;
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!summary.mortgage) return;
+    setBanner(null);
+    startTransition(async () => {
+      const res = await addMortgageEvent({
+        type: "rate_change",
+        mortgageId: summary.mortgage!.id,
+        eventDate: date,
+        newRatePct,
+        note: note || null,
+      });
+      if (res.ok) {
+        onOpenChange(false);
+        setDate("");
+        setRate("");
+        setNote("");
+        router.refresh();
+        return;
+      }
+      setBanner(res.error.message);
+    });
+  }
+
+  return (
+    <Modal
+      open={open}
+      onOpenChange={(next) => !pending && onOpenChange(next)}
+      title="Revisión de tipo"
+      description="Revisión de Euríbor o novación: nuevo TIN desde la fecha indicada."
+    >
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        {banner ? (
+          <div
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {banner}
+          </div>
+        ) : null}
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Fecha</span>
+            <input
+              type="date"
+              className={inputClass}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Nuevo TIN (%)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.001"
+              className={inputClass}
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+            />
+          </label>
+        </div>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Nota (opcional)</span>
+          <input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} />
+        </label>
+        {preview ? (
+          <p className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm">
+            <SensitiveValue>{preview}</SensitiveValue>
+          </p>
+        ) : null}
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+          >
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={pending || !date || rate === ""}>
+            {pending ? "Guardando…" : "Confirmar revisión"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
 }
