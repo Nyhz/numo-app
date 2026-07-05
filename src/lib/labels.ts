@@ -74,3 +74,17 @@ export function accountCountryLabel(code: string | null): string {
   if (!code) return "Sin asignar";
   return ACCOUNT_COUNTRY_LABELS[code] ?? code;
 }
+
+export const ASSET_TYPE_LABELS: Record<string, string> = {
+  crypto: "Cripto",
+  etf: "ETF",
+  stock: "Acciones",
+  bond: "Bonos",
+  fund: "Fondos",
+  "cash-equivalent": "Efectivo",
+  other: "Otros",
+};
+
+export function assetTypeLabel(type: string): string {
+  return ASSET_TYPE_LABELS[type] ?? type;
+}

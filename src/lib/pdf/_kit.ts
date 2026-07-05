@@ -1,4 +1,5 @@
 import type { jsPDF } from "jspdf";
+import { ASSET_TYPE_LABELS } from "../labels";
 
 /**
  * Design kit compartido por los PDF generados (informe fiscal y extracto).
@@ -407,16 +408,9 @@ export function finishFooters(doc: jsPDF, leftText: string): void {
   }
 }
 
-/** Etiquetas de tipos de activo para leyendas de gráficos. */
-export const ASSET_TYPE_LABELS: Record<string, string> = {
-  crypto: "Cripto",
-  etf: "ETF",
-  stock: "Acciones",
-  bond: "Bonos",
-  fund: "Fondos",
-  "cash-equivalent": "Efectivo",
-  other: "Otros",
-};
+/** Etiquetas de tipos de activo para leyendas de gráficos — la fuente de
+ *  verdad vive en lib/labels.ts; aquí solo el alias histórico del kit. */
+export { ASSET_TYPE_LABELS };
 
 export function assetTypeLabelPdf(type: string): string {
   return ASSET_TYPE_LABELS[type] ?? type;
