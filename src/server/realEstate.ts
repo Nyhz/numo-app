@@ -113,11 +113,14 @@ export async function getRealEstateOverview(
       .all();
     const terms = mortgage ? toTerms(mortgage) : null;
     const schedule = terms ? buildSchedule(terms, toScheduleEvents(events)) : [];
+    // Invariante histórica: un inmueble no computa antes de su purchaseDate.
+    const gated = property.purchaseDate > todayIso;
     const { valueEur, asOf } = currentValueAt(property.purchasePriceEur, valuations, todayIso);
-    const outstandingEur = terms ? outstandingAt(terms, schedule, todayIso) : 0;
-    const equityEur = roundEur(valueEur - outstandingEur);
+    const currentValueEur = gated ? 0 : valueEur;
+    const outstandingEur = gated ? 0 : terms ? outstandingAt(terms, schedule, todayIso) : 0;
+    const equityEur = roundEur(currentValueEur - outstandingEur);
     let loan: PropertySummary["loan"] = null;
-    if (terms) {
+    if (!gated && terms) {
       const summary = summarizeSchedule(terms, schedule);
       const interestPaidEur = interestPaidUntil(schedule, todayIso);
       const next = nextPaymentAfter(schedule, todayIso);
@@ -137,11 +140,11 @@ export async function getRealEstateOverview(
       events,
       valuations,
       schedule,
-      currentValueEur: valueEur,
+      currentValueEur,
       currentValueAsOf: asOf,
       outstandingEur,
       equityEur,
-      ownedPct: valueEur > 0 ? equityEur / valueEur : 0,
+      ownedPct: currentValueEur > 0 ? equityEur / currentValueEur : 0,
       loan,
     });
   }

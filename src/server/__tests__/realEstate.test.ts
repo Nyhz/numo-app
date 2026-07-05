@@ -113,6 +113,17 @@ describe("realEstate — lecturas", () => {
     expect(map.get("2026-01-10")).toBe(43_000);
   });
 
+  it("un inmueble no computa antes de su purchaseDate en el overview", async () => {
+    seedCanon(db);
+    const o = await getRealEstateOverview(db, "2026-01-09"); // día anterior a la compra
+    expect(o.totalEquityEur).toBe(0);
+    const p = o.properties[0];
+    expect(p.currentValueEur).toBe(0);
+    expect(p.outstandingEur).toBe(0);
+    expect(p.equityEur).toBe(0);
+    expect(p.loan).toBeNull();
+  });
+
   it("líneas de extracto (asOf)", async () => {
     seedCanon(db);
     const { lines, totalEquityEur } = await getStatementRealEstate(db, "2026-01-10");
