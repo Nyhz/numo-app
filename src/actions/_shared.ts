@@ -85,3 +85,9 @@ export function revalidateTaxEvent(year?: number): void {
   revalidatePath("/audit");
   if (year != null) revalidatePath(`/taxes/${year}`);
 }
+
+export function revalidateRealEstate(): void {
+  for (const p of ["/", "/real-estate", "/statement"]) {
+    revalidatePath(p);
+  }
+}
