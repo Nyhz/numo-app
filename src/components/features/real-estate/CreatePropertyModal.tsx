@@ -117,6 +117,9 @@ export function CreatePropertyModal({
       }
       if (result.error.code === "validation" && result.error.fieldErrors) {
         setFieldErrors(result.error.fieldErrors);
+        if (result.error.fieldErrors.mortgage?.length) {
+          setBanner(result.error.fieldErrors.mortgage.join(", "));
+        }
       } else {
         setBanner(result.error.message);
       }
@@ -289,7 +292,19 @@ export function CreatePropertyModal({
           >
             Cancelar
           </Button>
-          <Button type="submit" disabled={pending || !form.name || !form.purchaseDate}>
+          <Button
+            type="submit"
+            disabled={
+              pending ||
+              !form.name ||
+              !form.purchaseDate ||
+              (form.hasMortgage &&
+                (!form.principalEur ||
+                  !form.nominalRatePct ||
+                  !form.termYears ||
+                  !form.firstPaymentDate))
+            }
+          >
             {pending ? "Guardando…" : "Registrar inmueble"}
           </Button>
         </div>
