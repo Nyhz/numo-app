@@ -11,6 +11,7 @@ import { readDigest, readProfile } from "../lib/advisor/memory";
 import { getCostsSummary } from "./costs";
 import { getObjectivesAllocation } from "./objectives";
 import { getOverviewKpis } from "./overview";
+import { getRealEstateOverview } from "./realEstate";
 import { getStatementReport } from "./statement";
 
 const ASSET_TYPE_ES: Record<string, string> = {
@@ -32,18 +33,19 @@ const pp = (n: number, d = 1) => n.toLocaleString("es-ES", { maximumFractionDigi
  * existing server helpers.
  */
 export async function getAdvisorContext(dbc: DB = defaultDb): Promise<string> {
-  const [report, kpis, costs, objectives] = await Promise.all([
+  const [report, kpis, costs, objectives, realEstate] = await Promise.all([
     getStatementReport(dbc),
     getOverviewKpis({ range: "ALL", accountIds: [] }, dbc),
     getCostsSummary(dbc),
     getObjectivesAllocation(dbc),
+    getRealEstateOverview(dbc),
   ]);
   const t = report.totals;
   const out: string[] = [];
 
   out.push("## Cartera (datos en vivo)");
   out.push(
-    `- Patrimonio total: ${formatEur(t.netWorthEur)} (efectivo ${formatEur(t.cashEur)}, invertido ${formatEur(t.investedMarketValueEur)})`,
+    `- Patrimonio total: ${formatEur(t.netWorthEur)} (efectivo ${formatEur(t.cashEur)}, invertido ${formatEur(t.investedMarketValueEur)}${realEstate.totalEquityEur > 0 ? `, inmuebles ${formatEur(realEstate.totalEquityEur)}` : ""})`,
   );
   out.push(
     `- Plusvalía latente: ${formatEur(t.unrealizedPnlEur)}${t.unrealizedPnlPct != null ? ` (${formatPercent(t.unrealizedPnlPct)})` : ""}`,
@@ -55,6 +57,18 @@ export async function getAdvisorContext(dbc: DB = defaultDb): Promise<string> {
     out.push("\n### Reparto por tipo de activo");
     for (const g of valuedGroups) {
       out.push(`- ${typeLabel(g.assetType)}: ${formatEur(g.marketValueEur)} (${pp(g.weight * 100)} %)`);
+    }
+  }
+
+  if (realEstate.properties.length > 0) {
+    out.push("\n### Inmuebles");
+    for (const p of realEstate.properties) {
+      const base = `- ${p.property.name}: valor ${formatEur(p.currentValueEur)}, hipoteca pendiente ${formatEur(p.outstandingEur)}, equity ${formatEur(p.equityEur)}`;
+      const loan =
+        p.loan && p.mortgage
+          ? `; cuota ${formatEur(p.loan.paymentEur)}/mes (TIN ${p.mortgage.nominalRatePct} %), intereses restantes ${formatEur(p.loan.interestRemainingEur)}, fin ${p.loan.endDate ?? "—"}`
+          : "";
+      out.push(base + loan);
     }
   }
 

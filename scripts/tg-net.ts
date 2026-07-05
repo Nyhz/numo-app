@@ -26,6 +26,9 @@ async function main() {
     `Liquidez: ${formatEur(k.cashEur)}`,
     `Inversión (coste): ${formatEur(k.investedEur)}`,
     `Inversión (mercado): ${formatEur(k.investedMarketValueEur)}`,
+    ...(k.realEstateEquityEur > 0
+      ? [`Inmobiliario (equity): ${formatEur(k.realEstateEquityEur)}`]
+      : []),
     `P&L latente: ${k.unrealizedPnlEur >= 0 ? "+" : ""}${formatEur(k.unrealizedPnlEur)} (${signedPct(k.unrealizedPnlPct)})`,
     `XIRR: ${signedPct(k.xirrPct)}`,
   ];

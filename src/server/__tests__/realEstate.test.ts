@@ -15,6 +15,7 @@ import {
 } from "../realEstate";
 import { getOverviewKpis } from "../overview";
 import { getStatementReport } from "../statement";
+import { getAdvisorContext } from "../advisor";
 
 function makeDb(): DB {
   const sqlite = new Database(":memory:");
@@ -182,5 +183,21 @@ describe("integración extracto", () => {
       2,
     );
     expect(after.totals.investedMarketValueEur).toBe(before.totals.investedMarketValueEur);
+  });
+});
+
+describe("integración contexto del asesor", () => {
+  it("DB vacía ⇒ sin bloque de Inmuebles", async () => {
+    const db = makeDb();
+    const context = await getAdvisorContext(db);
+    expect(context).not.toContain("### Inmuebles");
+  });
+
+  it("con un inmueble seedeado ⇒ aparece el bloque de Inmuebles", async () => {
+    const db = makeDb();
+    seedCanon(db);
+    const context = await getAdvisorContext(db);
+    expect(context).toContain("### Inmuebles");
+    expect(context).toContain("Vivienda habitual");
   });
 });
