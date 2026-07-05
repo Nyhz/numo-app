@@ -72,7 +72,10 @@ export function buildStatementReportPdf(
     title: "Extracto de cartera · Finances Panel",
     big: stamp,
     subtitle: `${t.positionsCount} posiciones abiertas en ${t.accountsCount} cuenta${t.accountsCount === 1 ? "" : "s"} · valoración en EUR`,
-    metaLines: [`Generado el ${fmtDateIso(report.generatedAt)}`],
+    metaLines: [
+      `Generado el ${fmtDateIso(report.generatedAt)}`,
+      ...(report.pricesAsOf ? [`Precios a cierre del ${report.pricesAsOf}`] : []),
+    ],
     badge: report.asOf ? { label: "A día de fecha", tone: "accent" } : undefined,
   });
 

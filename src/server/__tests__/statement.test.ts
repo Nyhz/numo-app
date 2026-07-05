@@ -201,6 +201,36 @@ describe("getStatementReport", () => {
     expect(byName.get("MyInvestor")?.investedEur).toBe(0);
   });
 
+  it("pricesAsOf es la valuationDate más reciente entre las líneas valoradas", async () => {
+    const broker = seedAccount(db, "Degiro", "broker");
+
+    const etf = seedAsset(db, "MSCI World", "etf");
+    seedPosition(db, etf, 10, 1000);
+    seedValuation(db, etf, 10, 120, "2026-07-04");
+    seedBuy(db, broker, etf, 1000);
+
+    const fund = seedAsset(db, "Groupama Trésorerie", "fund");
+    seedPosition(db, fund, 5, 500);
+    seedValuation(db, fund, 5, 101, "2026-07-02"); // NAV rezagado
+    seedBuy(db, broker, fund, 500);
+
+    const report = await getStatementReport(db);
+    expect(report.pricesAsOf).toBe("2026-07-04");
+  });
+
+  it("pricesAsOf es null sin posiciones valoradas", async () => {
+    const empty = await getStatementReport(db);
+    expect(empty.pricesAsOf).toBeNull();
+
+    const broker = seedAccount(db, "Degiro", "broker");
+    const unvalued = seedAsset(db, "Cobas Internacional", "fund");
+    seedPosition(db, unvalued, 5, 750);
+    seedBuy(db, broker, unvalued, 750);
+
+    const report = await getStatementReport(db);
+    expect(report.pricesAsOf).toBeNull();
+  });
+
   it("excludes closed positions and handles unvalued assets", async () => {
     const broker = seedAccount(db, "Degiro", "broker");
 
@@ -259,6 +289,7 @@ describe("getStatementReport as-of", () => {
     const line = report.groups[0].lines[0];
     expect(line.unitPriceEur).toBeCloseTo(105);
     expect(line.valuationDate).toBe("2026-03-20");
+    expect(report.pricesAsOf).toBe("2026-03-20");
     expect(report.totals.investedMarketValueEur).toBeCloseTo(1050);
   });
 

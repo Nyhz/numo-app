@@ -23,6 +23,7 @@ export function buildStatementCsv(report: StatementReport): string {
   const out: string[] = [];
 
   out.push(csvRow(["generated_at", new Date(report.generatedAt).toISOString()]));
+  out.push(csvRow(["prices_as_of", report.pricesAsOf]));
   out.push(csvRow(["net_worth_eur", money(report.totals.netWorthEur)]));
   out.push(csvRow(["cash_eur", money(report.totals.cashEur)]));
   out.push(csvRow(["invested_market_value_eur", money(report.totals.investedMarketValueEur)]));

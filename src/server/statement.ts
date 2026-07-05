@@ -67,6 +67,9 @@ export type StatementReport = {
   generatedAt: number;
   /** Fecha de corte ISO cuando el extracto es reconstruido; null = actual. */
   asOf: string | null;
+  /** Fecha ISO del cierre más reciente entre las posiciones valoradas; los
+   *  precios del extracto corresponden a esta fecha, no a generatedAt. */
+  pricesAsOf: string | null;
   totals: StatementTotals;
   groups: StatementGroup[];
   accounts: StatementAccountLine[];
@@ -166,6 +169,15 @@ function assembleReport(input: AssemblyInput): StatementReport {
   const lines = input.lines.map((l) => toLine(l, investedMarketValueEur));
   const groups = groupAssetLines(lines, investedMarketValueEur);
 
+  // ISO YYYY-MM-DD ordena lexicográficamente = cronológicamente.
+  const pricesAsOf = lines.reduce<string | null>(
+    (acc, l) =>
+      l.valuationDate != null && (acc == null || l.valuationDate > acc)
+        ? l.valuationDate
+        : acc,
+    null,
+  );
+
   const accounts: StatementAccountLine[] = input.accounts
     .map((account) => {
       const investedEur = input.investedByAccount.get(account.accountId) ?? 0;
@@ -186,6 +198,7 @@ function assembleReport(input: AssemblyInput): StatementReport {
   return {
     generatedAt: Date.now(),
     asOf: input.asOf,
+    pricesAsOf,
     totals: {
       investedMarketValueEur,
       investedCostEur,

@@ -5,6 +5,7 @@ import { buildStatementMd } from "../statement-md";
 const sample = (asOf: string | null = null): StatementReport => ({
   generatedAt: Date.UTC(2026, 5, 9, 10, 30),
   asOf,
+  pricesAsOf: "2026-06-08",
   totals: {
     investedMarketValueEur: 1700,
     investedCostEur: 1600,
@@ -79,6 +80,20 @@ describe("buildStatementMd", () => {
     expect(md).not.toContain("Símbolo");
     expect(md).toContain("## Cuentas");
     expect(md).toContain("**Patrimonio total: 2200,00 €**");
+  });
+
+  it("indica la fecha real de los precios junto a la de generación", () => {
+    const md = buildStatementMd(sample());
+    expect(md).toContain(
+      "Generado el 2026-06-09 · precios a cierre del 2026-06-08 · 2 posiciones",
+    );
+  });
+
+  it("omite la coletilla de precios cuando no hay posiciones valoradas", () => {
+    const report = { ...sample(), pricesAsOf: null };
+    const md = buildStatementMd(report);
+    expect(md).not.toContain("precios a cierre");
+    expect(md).toContain("Generado el 2026-06-09 · 2 posiciones");
   });
 
   it("titula con asOf cuando el extracto es a fecha", () => {

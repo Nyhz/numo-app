@@ -23,6 +23,7 @@ export async function buildStatementXlsx(report: StatementReport): Promise<Uint8
   ];
   summary.addRow(["Extracto de cartera", ""]).font = { bold: true, size: 14 };
   summary.addRow(["Generado", new Date(report.generatedAt).toISOString()]);
+  summary.addRow(["Precios a cierre", report.pricesAsOf ?? "—"]);
   summary.addRow([]);
   const totalsRows: Array<[string, number | null, string | null]> = [
     ["Patrimonio (EUR)", report.totals.netWorthEur, EUR_FMT],

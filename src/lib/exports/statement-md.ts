@@ -37,7 +37,12 @@ export function buildStatementMd(report: StatementReport): string {
   out.push(`# Extracto de cartera — ${stamp}`);
   out.push("");
   out.push(
-    `Generado el ${isoDate(report.generatedAt)} · ${t.positionsCount} posiciones abiertas en ${t.accountsCount} cuenta${t.accountsCount === 1 ? "" : "s"} · valoración en EUR`,
+    [
+      `Generado el ${isoDate(report.generatedAt)}`,
+      ...(report.pricesAsOf ? [`precios a cierre del ${report.pricesAsOf}`] : []),
+      `${t.positionsCount} posiciones abiertas en ${t.accountsCount} cuenta${t.accountsCount === 1 ? "" : "s"}`,
+      "valoración en EUR",
+    ].join(" · "),
   );
   out.push("");
 

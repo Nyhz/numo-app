@@ -7,6 +7,7 @@ import { buildStatementReportPdf } from "../../pdf/statement-report";
 const sample = (): StatementReport => ({
   generatedAt: Date.UTC(2026, 5, 9, 10, 30),
   asOf: null,
+  pricesAsOf: "2026-06-08",
   totals: {
     investedMarketValueEur: 1700,
     investedCostEur: 1600,
@@ -103,6 +104,15 @@ describe("buildStatementCsv", () => {
     expect(csv).toContain("crypto,Bitcoin,BTC,,EUR,2,250.00,500.00,600.00,-100.00");
     expect(csv).toContain("MyInvestor,savings,EUR,500.00,0.00,500.00");
   });
+
+  it("emits prices_as_of next to generated_at", () => {
+    const csv = buildStatementCsv(sample());
+    expect(csv).toContain("prices_as_of,2026-06-08");
+    // Sin valoraciones la fila sale vacía, no desaparece — el consumidor
+    // (hoja de cálculo, script) siempre encuentra la clave.
+    const noPrices = buildStatementCsv({ ...sample(), pricesAsOf: null });
+    expect(noPrices).toContain("prices_as_of,\n");
+  });
 });
 
 describe("buildStatementXlsx", () => {
@@ -112,6 +122,19 @@ describe("buildStatementXlsx", () => {
     // XLSX is a zip: PK\x03\x04.
     expect([...bytes.slice(0, 4)]).toEqual([0x50, 0x4b, 0x03, 0x04]);
   });
+
+  it("la hoja Resumen incluye la fecha de cierre de los precios", async () => {
+    const ExcelJS = (await import("exceljs")).default;
+    const bytes = await buildStatementXlsx(sample());
+    const wb = new ExcelJS.Workbook();
+    // @ts-expect-error — el alias Buffer de exceljs no casa con @types/node 22
+    await wb.xlsx.load(Buffer.from(bytes));
+    const summary = wb.getWorksheet("Resumen");
+    const labels: unknown[] = [];
+    summary?.eachRow((row) => labels.push(row.getCell(1).value, row.getCell(2).value));
+    expect(labels).toContain("Precios a cierre");
+    expect(labels).toContain("2026-06-08");
+  });
 });
 
 describe("buildStatementReportPdf", () => {
@@ -119,5 +142,11 @@ describe("buildStatementReportPdf", () => {
     const bytes = buildStatementReportPdf(sample());
     expect(bytes.length).toBeGreaterThan(500);
     expect(String.fromCharCode(...bytes.slice(0, 5))).toBe("%PDF-");
+  });
+
+  it("la cabecera lleva la fecha de cierre de los precios", () => {
+    // jsPDF sin compress deja los literales de texto legibles en el stream.
+    const text = Buffer.from(buildStatementReportPdf(sample())).toString("latin1");
+    expect(text).toContain("Precios a cierre del 2026-06-08");
   });
 });

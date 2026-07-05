@@ -285,8 +285,10 @@ export default async function StatementPage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Extracto</h1>
           <p className="text-sm text-muted-foreground">
-            Extracto completo de la cartera a {formatDateTime(report.generatedAt)} — todas
-            las cuentas y activos, valorados en EUR.
+            Extracto completo de la cartera — generado el{" "}
+            {formatDateTime(report.generatedAt)}
+            {report.pricesAsOf ? ` · precios a cierre del ${report.pricesAsOf}` : ""} —
+            todas las cuentas y activos, valorados en EUR.
           </p>
         </div>
         <StatementExportMenu />
