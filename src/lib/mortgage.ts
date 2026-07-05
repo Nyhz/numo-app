@@ -163,3 +163,43 @@ export function summarizeSchedule(
     totalLoanCostEur: roundEur(terms.principalEur + totalInterestEur),
   };
 }
+
+export function interestPaidUntil(rows: ScheduleRow[], dateIso: string): number {
+  return roundEur(
+    rows.filter((r) => r.date <= dateIso).reduce((s, r) => s + r.interestEur, 0),
+  );
+}
+
+export function nextPaymentAfter(rows: ScheduleRow[], dateIso: string): ScheduleRow | null {
+  return rows.find((r) => r.kind === "payment" && r.date > dateIso) ?? null;
+}
+
+export type ValuationPoint = { valuationDate: string; valueEur: number };
+
+export function currentValueAt(
+  purchasePriceEur: number,
+  valuations: ValuationPoint[],
+  dateIso: string,
+): { valueEur: number; asOf: string | null } {
+  let best: ValuationPoint | null = null;
+  for (const v of valuations) {
+    if (v.valuationDate <= dateIso && (!best || v.valuationDate > best.valuationDate)) {
+      best = v;
+    }
+  }
+  return best
+    ? { valueEur: best.valueEur, asOf: best.valuationDate }
+    : { valueEur: purchasePriceEur, asOf: null };
+}
+
+export function equityAt(
+  purchasePriceEur: number,
+  valuations: ValuationPoint[],
+  terms: MortgageTerms | null,
+  rows: ScheduleRow[],
+  dateIso: string,
+): number {
+  const { valueEur } = currentValueAt(purchasePriceEur, valuations, dateIso);
+  const pendingEur = terms ? outstandingAt(terms, rows, dateIso) : 0;
+  return roundEur(valueEur - pendingEur);
+}

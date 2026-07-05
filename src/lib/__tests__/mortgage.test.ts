@@ -3,8 +3,13 @@ import {
   addMonthsIso,
   annuityPayment,
   buildSchedule,
+  currentValueAt,
+  equityAt,
+  interestPaidUntil,
+  nextPaymentAfter,
   outstandingAt,
   summarizeSchedule,
+  type MortgageScheduleEvent,
   type MortgageTerms,
 } from "../mortgage";
 
@@ -76,5 +81,88 @@ describe("outstandingAt", () => {
   });
   it("después de la última ⇒ 0", () => {
     expect(outstandingAt(CANON, rows, "2060-01-01")).toBe(0);
+  });
+});
+
+describe("buildSchedule — eventos", () => {
+  it("early_repayment reduce_term: misma cuota, menos cuotas", () => {
+    const ev: MortgageScheduleEvent[] = [
+      { type: "early_repayment", eventDate: "2027-01-15", amountEur: 20_000, mode: "reduce_term" },
+    ];
+    const rows = buildSchedule(CANON, ev);
+    const s = summarizeSchedule(CANON, rows);
+    const base = summarizeSchedule(CANON, buildSchedule(CANON));
+    const eventRow = rows.find((r) => r.kind === "early_repayment");
+    expect(eventRow).toMatchObject({ date: "2027-01-15", principalEur: 20_000, interestEur: 0 });
+    // Cuota intacta tras el evento…
+    const after = rows.find((r) => r.kind === "payment" && r.date === "2027-02-01");
+    expect(after?.paymentEur).toBe(672.93);
+    // …pero el préstamo acaba antes y con menos intereses.
+    expect(s.paymentsCount).toBeLessThan(300);
+    expect(s.totalInterestEur).toBeLessThan(base.totalInterestEur);
+    // El capital sigue cuadrando al céntimo (cuotas + amortización anticipada).
+    const total = rows.reduce((sum, r) => sum + r.principalEur, 0);
+    expect(Math.round(total * 100) / 100).toBe(150_000);
+  });
+
+  it("early_repayment reduce_installment: cuota menor, mismo vencimiento", () => {
+    const ev: MortgageScheduleEvent[] = [
+      { type: "early_repayment", eventDate: "2027-01-15", amountEur: 20_000, mode: "reduce_installment" },
+    ];
+    const rows = buildSchedule(CANON, ev);
+    const s = summarizeSchedule(CANON, rows);
+    const after = rows.find((r) => r.kind === "payment" && r.date === "2027-02-01");
+    expect(after && after.paymentEur < 672.93).toBe(true);
+    expect(s.paymentsCount).toBe(300);
+    expect(s.endDate).toBe("2051-08-01");
+  });
+
+  it("rate_change recalcula la cuota sobre pendiente y meses restantes", () => {
+    const ev: MortgageScheduleEvent[] = [
+      { type: "rate_change", eventDate: "2028-09-15", newRatePct: 3.5 },
+    ];
+    const rows = buildSchedule(CANON, ev);
+    const before = rows.find((r) => r.date === "2028-09-01");
+    const after = rows.find((r) => r.date === "2028-10-01");
+    expect(before?.ratePct).toBe(2.5);
+    expect(after?.ratePct).toBe(3.5);
+    expect(after && after.paymentEur > 672.93).toBe(true);
+    expect(summarizeSchedule(CANON, rows).paymentsCount).toBe(300);
+  });
+
+  it("amortización total liquida el préstamo", () => {
+    const rows = buildSchedule(CANON, [
+      { type: "early_repayment", eventDate: "2027-01-15", amountEur: 999_999, mode: "reduce_term" },
+    ]);
+    expect(rows[rows.length - 1]).toMatchObject({ kind: "early_repayment", remainingEur: 0 });
+  });
+});
+
+describe("valoraciones y equity", () => {
+  const rows = buildSchedule(CANON);
+  const vals = [
+    { valuationDate: "2028-05-01", valueEur: 215_000 },
+    { valuationDate: "2027-03-01", valueEur: 200_000 },
+  ];
+
+  it("currentValueAt: forward-fill con fallback al precio de compra", () => {
+    expect(currentValueAt(193_000, vals, "2026-12-01")).toEqual({ valueEur: 193_000, asOf: null });
+    expect(currentValueAt(193_000, vals, "2027-06-01")).toEqual({ valueEur: 200_000, asOf: "2027-03-01" });
+    expect(currentValueAt(193_000, vals, "2030-01-01")).toEqual({ valueEur: 215_000, asOf: "2028-05-01" });
+  });
+
+  it("equityAt: día de compra = la entrada (caso canónico +43k)", () => {
+    expect(equityAt(193_000, [], CANON, rows, "2026-08-20")).toBe(43_000);
+  });
+
+  it("equityAt sin hipoteca = valor vigente", () => {
+    expect(equityAt(193_000, vals, null, [], "2027-06-01")).toBe(200_000);
+  });
+
+  it("interestPaidUntil y nextPaymentAfter", () => {
+    expect(interestPaidUntil(rows, "2026-08-31")).toBe(0);
+    expect(interestPaidUntil(rows, "2026-09-01")).toBe(312.5);
+    expect(nextPaymentAfter(rows, "2026-09-01")?.date).toBe("2026-10-01");
+    expect(nextPaymentAfter(rows, "2060-01-01")).toBeNull();
   });
 });
