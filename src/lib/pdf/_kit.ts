@@ -160,25 +160,25 @@ export function statCards(cur: Cursor, cards: StatCard[]): void {
   const { doc } = cur;
   const gap = 10;
   const w = (CONTENT_W - gap * (cards.length - 1)) / cards.length;
-  const h = 64;
+  const h = 72;
   cards.forEach((c, i) => {
     const x = M + i * (w + gap);
     fill(doc, PANEL);
     doc.roundedRect(x, cur.y, w, h, 6, 6, "F");
     kicker(doc, c.kicker, x + 12, cur.y + 17);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
+    doc.setFontSize(17);
     text(doc, c.tone ?? INK);
-    doc.text(c.value, x + 12, cur.y + 37);
+    doc.text(c.value, x + 12, cur.y + 40);
     if (c.sub) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
       text(doc, MUTED);
-      doc.text(c.sub, x + 12, cur.y + 51);
+      doc.text(c.sub, x + 12, cur.y + 56);
     }
     text(doc, INK);
   });
-  cur.y += h + 22;
+  cur.y += h + 26;
 }
 
 /** Título de sección numerado con chip de acento. */
