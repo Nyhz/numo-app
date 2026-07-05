@@ -129,7 +129,7 @@ Consecuencia clave: `equityAt(fecha)` es calculable para **cualquier** día pasa
 
 ## Tests (vitest, sin red)
 
-- `src/lib/__tests__/mortgage.test.ts` — el grueso: cuadro francés contra valores conocidos (150k, TIN 2,5 %, 25 años ⇒ cuota ≈ 672,92 €; desglose primera cuota ≈ 312,50 € interés / 360,42 € capital; suma de capital del cuadro = principal al céntimo), amortización anticipada en ambos modos, `rate_change` a mitad de vida, eventos encadenados, `outstandingAt` en fronteras (antes de primera cuota, después de la última), `equityAt` con y sin valoraciones (fallback precio de compra), redondeos estables a 2 decimales.
+- `src/lib/__tests__/mortgage.test.ts` — el grueso: cuadro francés contra valores conocidos (150k, TIN 2,5 %, 25 años ⇒ cuota ≈ 672,93 €; desglose primera cuota ≈ 312,50 € interés / 360,43 € capital; suma de capital del cuadro = principal al céntimo), amortización anticipada en ambos modos, `rate_change` a mitad de vida, eventos encadenados, `outstandingAt` en fronteras (antes de primera cuota, después de la última), `equityAt` con y sin valoraciones (fallback precio de compra), redondeos estables a 2 decimales.
 - `src/server/__tests__/realEstate.test.ts` — lecturas contra DB de test siguiendo el patrón existente; agregado con 0, 1 y N inmuebles; inmueble sin hipoteca (equity = valor vigente).
 - Acciones: validación Zod (rechazos), transaccionalidad del alta inmueble+hipoteca, audit event escrito.
 - Overview/statement: el equity suma al total y **no** altera P&L ni retornos.

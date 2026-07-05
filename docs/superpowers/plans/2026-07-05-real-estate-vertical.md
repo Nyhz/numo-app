@@ -291,8 +291,8 @@ const CANON: MortgageTerms = {
 };
 
 describe("annuityPayment", () => {
-  it("caso canónico ≈ 672,92 €", () => {
-    expect(annuityPayment(150_000, 2.5, 300)).toBeCloseTo(672.92, 2);
+  it("caso canónico ≈ 672,93 €", () => {
+    expect(annuityPayment(150_000, 2.5, 300)).toBeCloseTo(672.93, 2);
   });
   it("tipo 0 % ⇒ principal / meses", () => {
     expect(annuityPayment(1200, 0, 12)).toBe(100);
@@ -318,10 +318,10 @@ describe("buildSchedule — sin eventos", () => {
       index: 1,
       date: "2026-09-01",
       kind: "payment",
-      paymentEur: 672.92,
+      paymentEur: 672.93,
       interestEur: 312.5,
-      principalEur: 360.42,
-      remainingEur: 149_639.58,
+      principalEur: 360.43,
+      remainingEur: 149_639.57,
     });
   });
 
@@ -346,7 +346,7 @@ describe("outstandingAt", () => {
     expect(outstandingAt(CANON, rows, "2026-08-15")).toBe(150_000);
   });
   it("entre cuotas ⇒ pendiente de la última cuota pagada", () => {
-    expect(outstandingAt(CANON, rows, "2026-09-15")).toBe(149_639.58);
+    expect(outstandingAt(CANON, rows, "2026-09-15")).toBe(149_639.57);
   });
   it("después de la última ⇒ 0", () => {
     expect(outstandingAt(CANON, rows, "2060-01-01")).toBe(0);
@@ -569,7 +569,7 @@ describe("buildSchedule — eventos", () => {
     expect(eventRow).toMatchObject({ date: "2027-01-15", principalEur: 20_000, interestEur: 0 });
     // Cuota intacta tras el evento…
     const after = rows.find((r) => r.kind === "payment" && r.date === "2027-02-01");
-    expect(after?.paymentEur).toBe(672.92);
+    expect(after?.paymentEur).toBe(672.93);
     // …pero el préstamo acaba antes y con menos intereses.
     expect(s.paymentsCount).toBeLessThan(300);
     expect(s.totalInterestEur).toBeLessThan(base.totalInterestEur);
@@ -585,7 +585,7 @@ describe("buildSchedule — eventos", () => {
     const rows = buildSchedule(CANON, ev);
     const s = summarizeSchedule(CANON, rows);
     const after = rows.find((r) => r.kind === "payment" && r.date === "2027-02-01");
-    expect(after && after.paymentEur < 672.92).toBe(true);
+    expect(after && after.paymentEur < 672.93).toBe(true);
     expect(s.paymentsCount).toBe(300);
     expect(s.endDate).toBe("2051-08-01");
   });
@@ -599,7 +599,7 @@ describe("buildSchedule — eventos", () => {
     const after = rows.find((r) => r.date === "2028-10-01");
     expect(before?.ratePct).toBe(2.5);
     expect(after?.ratePct).toBe(3.5);
-    expect(after && after.paymentEur > 672.92).toBe(true);
+    expect(after && after.paymentEur > 672.93).toBe(true);
     expect(summarizeSchedule(CANON, rows).paymentsCount).toBe(300);
   });
 
@@ -840,7 +840,7 @@ describe("realEstate — lecturas", () => {
     expect(p.currentValueAsOf).toBeNull();
     expect(p.outstandingEur).toBe(150_000);
     expect(p.ownedPct).toBeCloseTo(43_000 / 193_000, 6);
-    expect(p.loan?.paymentEur).toBe(672.92);
+    expect(p.loan?.paymentEur).toBe(672.93);
     expect(p.loan?.endDate).toBe("2051-01-01");
   });
 
@@ -2435,7 +2435,7 @@ export function PropertySection({ summary }: { summary: PropertySummary }) {
 Run: `pnpm typecheck && pnpm lint`
 Expected: limpio.
 
-Después, contra un DB de dev: arrancar `next dev` en el puerto 3210 (el 3200 lo sirve launchd — no tocarlo) y comprobar en el navegador: (1) entrada «Inmuebles» en la barra; (2) `/real-estate` muestra el estado vacío con CTA; (3) el alta con los números canónicos (193k / 4k / hipoteca 150k, 2,5 %, 25 años, primera cuota futura) muestra cuota en vivo ≈ 672,92 € y al guardar aparece el stub; (4) el KPI del overview sube +43k con desglose «· inmuebles». Verificar dark y light.
+Después, contra un DB de dev: arrancar `next dev` en el puerto 3210 (el 3200 lo sirve launchd — no tocarlo) y comprobar en el navegador: (1) entrada «Inmuebles» en la barra; (2) `/real-estate` muestra el estado vacío con CTA; (3) el alta con los números canónicos (193k / 4k / hipoteca 150k, 2,5 %, 25 años, primera cuota futura) muestra cuota en vivo ≈ 672,93 € y al guardar aparece el stub; (4) el KPI del overview sube +43k con desglose «· inmuebles». Verificar dark y light.
 
 - [ ] **Step 7: Commit**
 
@@ -2938,7 +2938,7 @@ export function ValuationsCard({ summary }: { summary: PropertySummary }) {
 - [ ] **Step 6: Verificar**
 
 Run: `pnpm typecheck && pnpm lint`
-Expected: limpio. En dev (3210): registrar el caso canónico y comprobar KPIs (43k equity, 22,3 % en propiedad, cuota 672,92 €, fin a 25 años de la primera cuota), añadir y borrar una valoración, y el vaivén del equity en overview. Dark y light.
+Expected: limpio. En dev (3210): registrar el caso canónico y comprobar KPIs (43k equity, 22,3 % en propiedad, cuota 672,93 €, fin a 25 años de la primera cuota), añadir y borrar una valoración, y el vaivén del equity en overview. Dark y light.
 
 - [ ] **Step 7: Commit**
 
@@ -3281,7 +3281,7 @@ export function RateChangeModal({
 - [ ] **Step 3: Verificar**
 
 Run: `pnpm typecheck && pnpm lint`
-Expected: limpio. En dev (3210): sobre el caso canónico, abrir «Amortización anticipada» con 20.000 € — el preview en modo plazo debe adelantar el fin varios años; en modo cuota debe bajar de 672,92 €. Confirmar y ver el evento listado, el equity actualizado y el cuadro recalculado. Probar también el rechazo (importe ≥ pendiente ⇒ banner de conflicto). Dark y light.
+Expected: limpio. En dev (3210): sobre el caso canónico, abrir «Amortización anticipada» con 20.000 € — el preview en modo plazo debe adelantar el fin varios años; en modo cuota debe bajar de 672,93 €. Confirmar y ver el evento listado, el equity actualizado y el cuadro recalculado. Probar también el rechazo (importe ≥ pendiente ⇒ banner de conflicto). Dark y light.
 
 - [ ] **Step 4: Commit**
 
