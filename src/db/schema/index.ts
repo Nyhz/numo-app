@@ -23,3 +23,7 @@ export * from "./advisor_runs";
 export * from "./advisor_conversations";
 export * from "./advisor_messages";
 export * from "./discover_candidates";
+export * from "./properties";
+export * from "./mortgages";
+export * from "./mortgage_events";
+export * from "./property_valuations";
