@@ -27,6 +27,7 @@ type Point = {
   label: string;
   marketIndex: number;
   totalValue: number;
+  realEstateEquityEur: number;
   dateIso: string;
 } & Record<`bench_${string}`, number | undefined>;
 
@@ -78,9 +79,13 @@ export function NetWorthChart({
         const point: Point = {
           label: formatLabel(p.date),
           dateIso: p.date,
-          totalValue: p.valueEur,
+          // Patrimonio total mostrado en el tooltip: mercado + inmobiliario.
+          // El equity es puramente aditivo aquí — no toca marketIndex.
+          totalValue: p.valueEur + (p.realEstateEquityEur ?? 0),
+          realEstateEquityEur: p.realEstateEquityEur ?? 0,
           // Time-weighted return index from the server: 100 = flat, deposits
           // and withdrawals do not move the line — only market performance does.
+          // Equity inmobiliario NUNCA entra aquí (ver overview.ts).
           marketIndex: p.performanceIndex,
         };
         for (const b of benchmarks) {
@@ -152,6 +157,12 @@ export function NetWorthChart({
         <p className="text-xs text-muted-foreground">
           ({formatIndexPercent(p.marketIndex)})
         </p>
+        {p.realEstateEquityEur > 0 && (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Inmobiliario:{" "}
+            <SensitiveValue>{formatEur(p.realEstateEquityEur)}</SensitiveValue>
+          </p>
+        )}
         {benchmarks.map((b) => {
           const v = p[`bench_${b.key}`];
           if (v == null || !Number.isFinite(v)) return null;

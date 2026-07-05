@@ -79,6 +79,12 @@ async function KpiRow({ filters }: { filters: Filters }) {
           <span className="text-xs text-muted-foreground">
             Efectivo <SensitiveValue>{formatEur(kpis.cashEur)}</SensitiveValue> · invertido{" "}
             <SensitiveValue>{formatEur(kpis.investedMarketValueEur)}</SensitiveValue>
+            {kpis.realEstateEquityEur > 0 ? (
+              <>
+                {" "}· inmuebles{" "}
+                <SensitiveValue>{formatEur(kpis.realEstateEquityEur)}</SensitiveValue>
+              </>
+            ) : null}
           </span>
         </div>
         <div className="flex flex-col gap-1.5 p-5">

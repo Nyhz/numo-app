@@ -10,7 +10,9 @@ import {
 } from "../db/schema";
 import { getAccountsSummary } from "./accounts";
 import { materializedNetWorthByDate } from "./dailyBalances";
+import { getRealEstateEquityAt, getRealEstateEquityByDate } from "./realEstate";
 import { isCashBearingAccount } from "../lib/domain";
+import { todayIsoLocal } from "../lib/asof";
 import { toIsoDate } from "../lib/time";
 import { computeXirr, type CashFlow } from "../lib/xirr";
 import { listPositions, type PositionRow } from "./positions";
@@ -44,6 +46,11 @@ export type OverviewKpis = {
   /** Money-weighted annual return (XIRR) over the selected window — the
    *  investor's own rate, entry dates and contribution sizes included. */
   xirrPct: number | null;
+  /** Equity inmobiliario (valor − hipoteca pendiente) a hoy. Aditivo sobre
+   *  totalNetWorthEur — no participa en investedEur, unrealizedPnlEur ni
+   *  xirrPct, que siguen midiendo solo la cartera de posiciones. 0 cuando hay
+   *  filtro de cuentas (un inmueble no pertenece a ninguna cuenta). */
+  realEstateEquityEur: number;
 };
 
 /** XIRR flows from the net-worth series: opening value counts as buying the
@@ -211,8 +218,12 @@ export async function getOverviewKpis(
     const series = await getNetWorthSeries(filters, db);
     xirrPct = xirrFromSeries(series);
   }
+  const realEstateEquityEur = filteringAccounts
+    ? 0
+    : await getRealEstateEquityAt(todayIsoLocal(), db);
   return {
-    totalNetWorthEur: cashEur + marketValueEur,
+    totalNetWorthEur: cashEur + marketValueEur + realEstateEquityEur,
+    realEstateEquityEur,
     cashEur,
     investedEur,
     investedMarketValueEur: marketValueEur,
@@ -232,6 +243,9 @@ export type NetWorthPoint = {
    *  Chain-links daily market returns and strips out contributions, so a
    *  fresh deposit + buy does not move the line. */
   performanceIndex: number;
+  /** Equity inmobiliario a esta fecha. Aditivo para el total del gráfico —
+   *  NO entra en valueEur, performanceIndex ni XIRR. */
+  realEstateEquityEur: number;
 };
 
 /**
@@ -315,7 +329,12 @@ async function computeNetWorthSeries(
   if (!filteringAccounts) {
     const materialized = materializedNetWorthByDate(db, scopeAssetIdList, startIso);
     if (materialized) {
-      return assembleNetWorthPoints(materialized, await contributionDeltas(filters, db));
+      const equityByDate = await getRealEstateEquityByDate([...materialized.keys()], db);
+      return assembleNetWorthPoints(
+        materialized,
+        await contributionDeltas(filters, db),
+        equityByDate,
+      );
     }
   }
 
@@ -508,7 +527,10 @@ async function computeNetWorthSeries(
     }
   }
 
-  return assembleNetWorthPoints(byDate, await contributionDeltas(filters, db));
+  const equityByDate = filteringAccounts
+    ? new Map<string, number>()
+    : await getRealEstateEquityByDate([...byDate.keys()], db);
+  return assembleNetWorthPoints(byDate, await contributionDeltas(filters, db), equityByDate);
 }
 
 /** Date-keyed net-contribution delta (-cashImpact sums to positive for buys). */
@@ -545,6 +567,7 @@ async function contributionDeltas(
 function assembleNetWorthPoints(
   byDate: Map<string, number>,
   deltaByDate: Map<string, number>,
+  equityByDate: Map<string, number> = new Map(),
 ): NetWorthPoint[] {
   // Cumulative invested EUR per date. Invested_t = cost_basis_bought_up_to_t
   // - cost_basis_realised_from_sells_up_to_t. For simplicity we sum the
@@ -583,6 +606,7 @@ function assembleNetWorthPoints(
       valueEur: value,
       investedEur: invested,
       performanceIndex,
+      realEstateEquityEur: equityByDate.get(date) ?? 0,
     });
   }
   return out;

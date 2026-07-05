@@ -13,6 +13,7 @@ import {
   getRealEstateOverview,
   getStatementRealEstate,
 } from "../realEstate";
+import { getOverviewKpis } from "../overview";
 
 function makeDb(): DB {
   const sqlite = new Database(":memory:");
@@ -136,5 +137,31 @@ describe("realEstate — lecturas", () => {
       equityEur: 43_000,
     });
     expect(totalEquityEur).toBe(43_000);
+  });
+});
+
+describe("integración overview", () => {
+  let db: DB;
+  beforeEach(() => {
+    db = makeDb();
+  });
+
+  it("el equity suma al patrimonio sin tocar P&L", async () => {
+    const before = await getOverviewKpis({ range: "ALL" }, db);
+    seedCanon(db);
+    const after = await getOverviewKpis({ range: "ALL" }, db);
+    expect(after.realEstateEquityEur).toBeGreaterThan(0);
+    expect(after.totalNetWorthEur).toBeCloseTo(
+      after.cashEur + after.investedMarketValueEur + after.realEstateEquityEur,
+      2,
+    );
+    expect(after.unrealizedPnlEur).toBe(before.unrealizedPnlEur);
+    expect(after.investedEur).toBe(before.investedEur);
+  });
+
+  it("con filtro de cuentas el equity queda fuera", async () => {
+    seedCanon(db);
+    const k = await getOverviewKpis({ range: "ALL", accountIds: ["acc-x"] }, db);
+    expect(k.realEstateEquityEur).toBe(0);
   });
 });
