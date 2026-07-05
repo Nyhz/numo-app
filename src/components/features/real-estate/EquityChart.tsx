@@ -38,15 +38,20 @@ export function EquityChart({ summary }: { summary: PropertySummary }) {
       },
       ...summary.schedule.map((r) => ({ date: r.date, pendienteEur: r.remainingEur })),
     ];
-    return base.map(({ date, pendienteEur }) => {
+    // El último punto pasado pertenece a AMBAS series (vértice compartido)
+    // para que el tramo sólido y el discontinuo enlacen sin hueco en «hoy».
+    let lastPastIdx = -1;
+    base.forEach((b, i) => {
+      if (b.date <= todayIso) lastPastIdx = i;
+    });
+    return base.map(({ date, pendienteEur }, i) => {
       const { valueEur } = currentValueAt(summary.property.purchasePriceEur, valuations, date);
       const equity = valueEur - pendienteEur;
       return {
         date,
         pendienteEur,
-        equityPastEur: date <= todayIso ? equity : null,
-        // Solapa un punto para que las dos series enlacen sin hueco.
-        equityFutureEur: date >= todayIso || date === base.at(-1)?.date ? equity : null,
+        equityPastEur: i <= lastPastIdx ? equity : null,
+        equityFutureEur: i >= lastPastIdx ? equity : null,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
