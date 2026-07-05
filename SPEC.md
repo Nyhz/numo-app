@@ -129,6 +129,7 @@ Recharts, styled via CSS variables so they track the theme. Tooltips minimal —
 | `/transactions` | Unified timeline of asset trades + cash movements. Manual create flow (buy / sell / dividend / fee / swap / cash movement). **No CSV import** — the broker importers were removed 2026-06; manual entry is the only registration path. |
 | `/statement` | Visual portfolio statement — value chart with range selector, reparto por tipo de activo, composición por regiones geográficas (JustETF), riesgo (caída desde máximos + volatilidad), composición por objetivos (1/3) y por sectores (2/3, Yahoo), value by account, P&L by type, holdings grouped by type, costes (comisiones + TER), accounts table. Export PDF / XLSX / CSV / MD via `/api/exports/statement?format=`; el param opcional `asOf=YYYY-MM-DD` (validado, no futuro) reconstruye el extracto a esa fecha — replay del ledger para cantidades/coste (misma media ponderada que el recompute), última valoración ≤ fecha como precio y efectivo = opening + movimientos ≤ corte. |
 | `/objectives` | Objetivos de asignación por activo — peso actual vs. objetivo, desviación (% y €), planificador de aportación. |
+| `/real-estate` | Patrimonio inmobiliario: inmuebles, hipoteca francesa derivada de eventos (amortización anticipada / revisión de tipo), equity (valor − capital vivo) que suma al patrimonio total. UI en español, ruta en inglés; vertical account-agnostic — sin vínculo con cuentas ni caja. |
 | `/simulador` | Simulador FIRE de interés compuesto — escenarios pesimista/base/optimista, año bola de nieve, regla del 4 %. Prerellenado con el patrimonio actual. |
 | `/asesor` | Asesor financiero IA — chat con contexto de cartera, pestañas de conversación persistentes, coste mensual del crédito, toggle de scans de mercado. |
 | `/taxes` | Redirige al año fiscal más reciente. |
@@ -188,6 +189,16 @@ All monetary values are stored in EUR (base currency) alongside native currency 
 
 `AssetTransaction.source` still carries the legacy `degiro` / `binance` / `cobas` provenance on rows ingested before the importers were removed (2026-06); no import subsystem exists anymore. `AssetTransaction` also carries `valuationBasis` (`user` / `market-fx`) for the crypto-swap exception in §6.
 
+**Property** — inmueble en propiedad (vivienda habitual, etc.), vertical autónoma: `id`, `name`, `address`, `purchaseDate`, `purchasePriceEur`, `purchaseCostsEur`, `notes`. Sin `accountId` — no toca caja ni posiciones de ninguna cuenta. Su equity solo computa a partir de `purchaseDate` (invariante histórica: no aparece en el patrimonio ni en el gráfico antes de la compra).
+
+**Mortgage** (0..1 por inmueble) — hipoteca francesa: `id`, `propertyId`, `lender`, `principalEur`, `rateType` (`fixed` / `variable` / `mixed`), `nominalRatePct` (TIN; la TAE queda fuera a propósito), `termMonths`, `firstPaymentDate`, `spreadPct`, `referenceIndex`.
+
+**MortgageEvent** — historial auditable de la hipoteca: `early_repayment` (amortización anticipada — `amountEur` + `mode` `reduce_term` / `reduce_installment`) o `rate_change` (revisión de Euríbor / novación — `newRatePct`). El **cuadro de amortización se deriva** de `Mortgage` + sus `MortgageEvent` en cada lectura (`src/lib/mortgage.ts`) — **nunca se persiste**.
+
+**PropertyValuation** — valoración manual fechada (tasación, reforma): `propertyId` + `valuationDate` (único por par) + `valueEur` + `note`. El valor vigente de un inmueble a una fecha F es la última valoración ≤ F; sin ninguna, `purchasePriceEur`.
+
+Regla central del pasivo: lo que resta del patrimonio es el **capital vivo** (`outstandingEur` a la fecha) — los **intereses futuros del préstamo nunca computan** como deuda ni reducen el equity por adelantado.
+
 **Derived & domain tables** (schema under `src/db/schema/`, kept in sync by tx-scoped recompute or cron, never hand-edited):
 - **Composition:** `asset_sector_weightings`, `asset_country_weightings` — per-asset sector/country snapshots (§6).
 - **Tax engine** (`src/server/tax/`): `tax_lots` (FIFO acquisition lots, gross cost + fees separated, deferred-loss carry), `tax_lot_consumptions` (sale→lot links), `tax_wash_sale_adjustments` (norma antiaplicación), `tax_year_snapshots` (sealed-year frozen reports), `tax_declared_baselines` (manually-entered prior M720/M721 filings).
@@ -203,7 +214,7 @@ Merged timeline item across `AssetTransaction` and `AccountCashMovement`. Shared
 
 ### 5.1 Overview Dashboard (`/`)
 
-- **KPI row:** total portfolio value (EUR), 24h change, unrealized P&L, cash balance.
+- **KPI row:** total portfolio value (EUR: líquido + invertido + equity inmobiliario — `realEstateEquityEur`, 0 when an account filter is active, since a property belongs to no account), 24h change, unrealized P&L, cash balance.
 - **Account filter:** "All accounts" or pick one. Filter applies to every tile on the page.
 - **Range selector:** `1D | 1W | 1M | YTD | 1Y | MAX`. Y-axis auto-scales to selected range min/max with ~5% margin (not zero-based). `MAX` starts at the first portfolio transaction date, not the full price-history window.
 - **Performance chart:** filled area, cumulative portfolio value in EUR over the selected range. Server-computed from `daily_balances` + `asset_valuations`.
@@ -262,7 +273,7 @@ Chronological list of mutations across accounts, assets, and transactions. Each 
 
 ### 5.8 Statement (`/statement`)
 
-The full visual portfolio statement (force-dynamic, always recomputed). Sections: value chart with range selector; **reparto por tipo de activo** (donut); **composición por regiones** geográficas (donut); **riesgo** (max drawdown + annualised volatility from the 100-anchored performance index, `src/lib/risk.ts`); **composición por objetivos** (1/3, donut coloured per objective) alongside **composición por sectores** (2/3); value by account; P&L by type; **costes** — accumulated commissions + custody fees + forward-looking TER drag (`src/server/costs.ts`); holdings grouped by type; accounts table. Exports PDF / XLSX / CSV.
+The full visual portfolio statement (force-dynamic, always recomputed). Sections: value chart with range selector; **reparto por tipo de activo** (donut); **composición por regiones** geográficas (donut); **riesgo** (max drawdown + annualised volatility from the 100-anchored performance index, `src/lib/risk.ts`); **composición por objetivos** (1/3, donut coloured per objective) alongside **composición por sectores** (2/3); value by account; P&L by type; **costes** — accumulated commissions + custody fees + forward-looking TER drag (`src/server/costs.ts`); holdings grouped by type; accounts table; **Inmuebles** — one line per property (valor, valorado a, hipoteca pendiente, equity), rendered only when at least one property exists, in the on-screen statement, the MD export and the PDF export alike. `StatementTotals.realEstateEquityEur` folds into `netWorthEur` the same way it does on the overview. Exports PDF / XLSX / CSV / MD.
 
 ### 5.9 Objectives (`/objectives`)
 
@@ -272,9 +283,11 @@ Allocation plan tied to **assets** (so the same exposure across brokers aggregat
 
 Deterministic FIRE compound-interest projection (`src/lib/simulator.ts`, side-effect-free). Inputs: initial capital (prefilled from current net worth), monthly contribution + growth, expected return, horizon, inflation, scenario spreads. Outputs three scenarios (pesimista/base/optimista) with year-by-year nominal/real value, the **snowball year** (interest ≥ contribution), reverse solvers (required contribution / years to a target), and a **FIRE block** (4 %-rule number and when it's reached in real terms). Tax is injected as a callback so the lib stays server-free.
 
+El **equity inmobiliario queda EXCLUIDO del prerrelleno** — decisión de diseño, no omisión: la vivienda habitual no es capital invertible, y la regla del 4 % solo aplica sobre líquido + invertido. Registrar un inmueble no debe mover el capital inicial del simulador.
+
 ### 5.11 Advisor (`/asesor`) + Telegram
 
-AI financial advisor on the **Claude Agent SDK**, billed to the Max subscription via `CLAUDE_CODE_OAUTH_TOKEN` (refuses to run if `ANTHROPIC_API_KEY` is set — it would bypass the credit). Interactive chat (`/api/advisor/chat`, streaming Opus) reasons over a live portfolio snapshot + the investor profile + the market digest; conversations persist as tabs (`advisor_conversations`/`advisor_messages`) and the assistant may propose profile-memory edits (confirm-gated). Three crons maintain the knowledge base: **advisor-scan** (hourly Sonnet + WebSearch news scan → digest; 09:00 slot sends a Telegram morning brief), **advisor-curate** (weekly digest prune), **advisor-chat-compact** (weekly transcript summarisation). Every run is metered in `advisor_runs` (tokens/cost/model). A standalone launchd daemon (`scripts/tg-bot.ts`, `com.finances.tg-bot`) long-polls Telegram for two commands — **`/net`** (portfolio KPIs) and **`/ask`** (one-shot advisor) — restricted to `TELEGRAM_CHAT_ID`.
+AI financial advisor on the **Claude Agent SDK**, billed to the Max subscription via `CLAUDE_CODE_OAUTH_TOKEN` (refuses to run if `ANTHROPIC_API_KEY` is set — it would bypass the credit). Interactive chat (`/api/advisor/chat`, streaming Opus) reasons over a live portfolio snapshot + the investor profile + the market digest; conversations persist as tabs (`advisor_conversations`/`advisor_messages`) and the assistant may propose profile-memory edits (confirm-gated). The live snapshot (`src/server/advisor.ts`) folds in the real estate equity — total patrimonio line + a per-property breakdown (valor, hipoteca pendiente, equity, cuota, intereses restantes) when at least one property exists. Three crons maintain the knowledge base: **advisor-scan** (hourly Sonnet + WebSearch news scan → digest; 09:00 slot sends a Telegram morning brief), **advisor-curate** (weekly digest prune), **advisor-chat-compact** (weekly transcript summarisation). Every run is metered in `advisor_runs` (tokens/cost/model). A standalone launchd daemon (`scripts/tg-bot.ts`, `com.finances.tg-bot`) long-polls Telegram for two commands — **`/net`** (portfolio KPIs, including an «Inmobiliario (equity)» line when non-zero) and **`/ask`** (one-shot advisor) — restricted to `TELEGRAM_CHAT_ID`.
 
 ### 5.12 Settings (`/settings`)
 
@@ -341,9 +354,11 @@ Drizzle schema under `src/db/schema/*.ts`, one file per domain aggregate (accoun
 
 All data access runs through Server Components + Server Actions. There is no HTTP API layer between the UI and the DB — the old `lib/api.ts` wrapper from the monorepo is replaced by direct Drizzle calls in `src/server/`.
 
-Read helpers: `src/server/accounts.ts`, `assets.ts`, `transactions.ts`, `overview.ts`, `positions.ts`, `savings.ts`, `statement.ts`, `sectors.ts`, `countries.ts`, `costs.ts`, `audit.ts`, plus the tax engine under `src/server/tax/`. The same layer hosts the tx-scoped derived-state recompute engine (`recompute.ts`, `rebuild.ts`, `valuations.ts`, `tax/lots.ts`) — write functions callable only inside an action's transaction.
+Read helpers: `src/server/accounts.ts`, `assets.ts`, `transactions.ts`, `overview.ts`, `positions.ts`, `savings.ts`, `statement.ts`, `sectors.ts`, `countries.ts`, `costs.ts`, `audit.ts`, `realEstate.ts` (overview de inmuebles/hipotecas, equity a fecha y por serie, línea del extracto), plus the tax engine under `src/server/tax/`. The same layer hosts the tx-scoped derived-state recompute engine (`recompute.ts`, `rebuild.ts`, `valuations.ts`, `tax/lots.ts`) — write functions callable only inside an action's transaction.
 
-Mutations: Server Actions in `src/actions/*.ts`, one file per aggregate.
+Mutations: Server Actions in `src/actions/*.ts`, one file per aggregate — including `realEstate.ts` (7 acciones: `createProperty`, `updateProperty`, `deleteProperty`, `addValuation`, `deleteValuation`, `addMortgageEvent`, `deleteMortgageEvent`).
+
+The real estate vertical's pure engine — cuadro de amortización francesa, capital vivo y equity a fecha, sin DB ni red — vive en `src/lib/mortgage.ts` (client-safe: alimenta también la cuota en vivo del alta de hipoteca en el formulario).
 
 ---
 
