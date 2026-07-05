@@ -245,11 +245,33 @@ describe("getStatementReport", () => {
     expect(report.totals.positionsCount).toBe(1);
     const line = report.groups[0].lines[0];
     expect(line.name).toBe("Cobas Internacional");
-    expect(line.marketValueEur).toBeNull();
-    expect(line.pnlEur).toBeNull();
-    // No valued cost — pct must be null, not divide-by-zero garbage.
-    expect(report.totals.unrealizedPnlPct).toBeNull();
+    // Sin precio ⇒ valorada a coste (tiene valor), no null/0. P/L 0, marcada.
+    expect(line.valuedAtCost).toBe(true);
+    expect(line.marketValueEur).toBeCloseTo(750);
+    expect(line.pnlEur).toBe(0);
+    expect(report.totals.investedMarketValueEur).toBeCloseTo(750);
+    expect(report.totals.netWorthEur).toBeCloseTo(750);
+    expect(report.totals.unrealizedPnlEur).toBeCloseTo(0);
+    expect(report.totals.unrealizedPnlPct).toBeCloseTo(0);
     expect(report.totals.investedCostEur).toBeCloseTo(750);
+  });
+
+  it("una posición sin precio se valora a coste igual que el Resumen (sin divergencia)", async () => {
+    const broker = seedAccount(db, "Degiro", "broker");
+    // Valorada.
+    const etf = seedAsset(db, "MSCI World", "etf");
+    seedPosition(db, etf, 10, 1000);
+    seedValuation(db, etf, 10, 120); // mercado 1200
+    seedBuy(db, broker, etf, 1000);
+    // Sin precio: aporta su coste (500), no 0.
+    const fund = seedAsset(db, "Cobas", "fund");
+    seedPosition(db, fund, 5, 500);
+    seedBuy(db, broker, fund, 500);
+
+    const report = await getStatementReport(db);
+    // 1200 (mercado) + 500 (coste del no valorado) = 1700, no 1200.
+    expect(report.totals.investedMarketValueEur).toBeCloseTo(1700);
+    expect(report.totals.netWorthEur).toBeCloseTo(1700);
   });
 });
 

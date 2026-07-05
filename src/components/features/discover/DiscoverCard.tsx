@@ -25,7 +25,8 @@ export function DiscoverCard({ candidate }: { candidate: DiscoverCandidate }) {
 
       {candidate.price != null && (
         <SensitiveValue as="div" className="text-lg font-semibold tabular-nums">
-          {candidate.price} {candidate.currency ?? ""}
+          {candidate.price.toLocaleString("es-ES", { maximumFractionDigits: 4 })}{" "}
+          {candidate.currency ?? ""}
         </SensitiveValue>
       )}
 

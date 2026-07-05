@@ -39,6 +39,7 @@ const sample = (asOf: string | null = null): StatementReport => ({
           pnlPct: 0.2,
           weight: 1200 / 1700,
           valuationDate: "2026-06-08",
+          valuedAtCost: false,
         },
       ],
     },
@@ -109,16 +110,16 @@ describe("buildStatementMd", () => {
     expect(md).toContain("+20,00 %");
   });
 
-  it("una línea sin valorar muestra guiones, no ceros", () => {
+  it("una línea sin precio se valora a coste y se marca «a coste»", () => {
     const report = sample();
     const line = report.groups[0].lines[0];
     line.unitPriceEur = null;
-    line.marketValueEur = null;
-    line.pnlEur = null;
-    line.pnlPct = null;
-    line.weight = null;
+    line.marketValueEur = line.costEur; // 1000: valorada a coste, no null
+    line.pnlEur = 0;
+    line.pnlPct = 0;
+    line.valuedAtCost = true;
     line.valuationDate = null;
     const md = buildStatementMd(report);
-    expect(md).toMatch(/MSCI \\\| World.*—/);
+    expect(md).toMatch(/MSCI \\\| World.*1000,00 € \(a coste\)/);
   });
 });

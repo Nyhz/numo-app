@@ -314,6 +314,20 @@ export async function syncPrices(
         )
         .get();
 
+      // Posición cerrada/inexistente: no mantener valoración. El motor de
+      // rebuild nunca escribe filas con qty<=0, así que el cron tampoco debe —
+      // evita filas fantasma qty=0 que divergen de la fuente única. Limpia
+      // cualquier fila previa de hoy.
+      if (quantity <= 0) {
+        if (existing) {
+          await db
+            .delete(assetValuations)
+            .where(eq(assetValuations.id, existing.id))
+            .run();
+        }
+        continue;
+      }
+
       if (existing) {
         await db
           .update(assetValuations)

@@ -132,6 +132,18 @@ describe("updateAsset + deactivateAsset", () => {
     expect(result.data.isActive).toBe(false);
   });
 
+  it("updateAsset re-infiere assetClassTax al cambiar el tipo de activo", async () => {
+    // Alta como stock → listed_security (ventana 2 meses, bloque M720 valores).
+    const before = await db.select().from(schema.assets).where(eq(schema.assets.id, id)).get();
+    expect(before?.assetClassTax).toBe("listed_security");
+
+    const result = await updateAsset({ id, assetType: "fund" }, db);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Corregirlo a fondo debe recalcular la clase fiscal, no dejarla congelada.
+    expect(result.data.assetClassTax).toBe("fund");
+  });
+
   it("updateAsset returns not_found for missing id", async () => {
     const result = await updateAsset({ id: "missing", name: "x" }, db);
     expect(result.ok).toBe(false);

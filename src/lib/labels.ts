@@ -91,3 +91,63 @@ export const ASSET_TYPE_LABELS: Record<string, string> = {
 export function assetTypeLabel(type: string): string {
   return ASSET_TYPE_LABELS[type] ?? type;
 }
+
+/** Categoría de bien en el extranjero (bloque M720/M721). */
+export const M720_CATEGORY_LABELS: Record<string, string> = {
+  "broker-securities": "Valores",
+  "bank-accounts": "Cuentas",
+  crypto: "Criptomonedas",
+};
+
+export function m720CategoryLabel(type: string): string {
+  return M720_CATEGORY_LABELS[type] ?? type;
+}
+
+/** Entidad afectada por un evento de auditoría. */
+export const AUDIT_ENTITY_LABELS: Record<string, string> = {
+  account: "Cuenta",
+  asset: "Activo",
+  asset_transaction: "Transacción",
+  cash_movement: "Movimiento de efectivo",
+  objective: "Objetivo",
+  price_alert: "Alerta de precio",
+  alert_event: "Alerta disparada",
+  benchmark: "Índice de referencia",
+};
+
+export function auditEntityLabel(type: string): string {
+  return AUDIT_ENTITY_LABELS[type] ?? type;
+}
+
+/** Acción registrada en un evento de auditoría. */
+export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  create: "Alta",
+  "create-dividend": "Alta de dividendo",
+  "create-swap": "Alta de canje",
+  update: "Edición",
+  delete: "Borrado",
+  deactivate: "Desactivación",
+  backfill: "Relleno histórico",
+  assign: "Asignación",
+  retarget: "Reajuste de objetivo",
+  reorder: "Reordenación",
+  acknowledge: "Reconocimiento",
+  watchlist_add: "Añadido a seguimiento",
+  watchlist_remove: "Quitado de seguimiento",
+};
+
+export function auditActionLabel(action: string): string {
+  return AUDIT_ACTION_LABELS[action] ?? action;
+}
+
+/** Origen de un evento de auditoría. */
+export const AUDIT_SOURCE_LABELS: Record<string, string> = {
+  ui: "Interfaz",
+  cron: "Tarea programada",
+  system: "Sistema",
+  advisor: "Asesor",
+};
+
+export function auditSourceLabel(source: string): string {
+  return AUDIT_SOURCE_LABELS[source] ?? source;
+}

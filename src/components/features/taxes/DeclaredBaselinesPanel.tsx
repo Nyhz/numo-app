@@ -52,7 +52,9 @@ export function DeclaredBaselinesPanel({
     const result = await deleteDeclaredBaseline({ id: deleting.id });
     if (!result.ok) {
       setDeleteError(result.error.message);
-      return;
+      // Throw so ConfirmModal skips its onOpenChange(false) and stays open with
+      // the error visible — a bare return lets the modal close and hide it.
+      throw new Error(result.error.message);
     }
     router.refresh();
   }

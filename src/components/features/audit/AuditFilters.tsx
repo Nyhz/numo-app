@@ -4,13 +4,17 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/src/components/ui/Button";
 import { cn } from "@/src/lib/cn";
+import { auditActionLabel, auditEntityLabel } from "@/src/lib/labels";
 
 const ENTITY_TYPES = [
   "account",
   "asset",
   "asset_transaction",
   "cash_movement",
-  "import",
+  "objective",
+  "price_alert",
+  "alert_event",
+  "benchmark",
 ] as const;
 
 const ACTIONS = [
@@ -18,8 +22,11 @@ const ACTIONS = [
   "update",
   "delete",
   "deactivate",
-  "manual_price_override",
-  "commit",
+  "assign",
+  "retarget",
+  "reorder",
+  "acknowledge",
+  "backfill",
 ] as const;
 
 type Values = {
@@ -108,7 +115,7 @@ export function AuditFilters() {
           <option value="">Todos</option>
           {ENTITY_TYPES.map((t) => (
             <option key={t} value={t}>
-              {t}
+              {auditEntityLabel(t)}
             </option>
           ))}
         </select>
@@ -135,7 +142,7 @@ export function AuditFilters() {
           <option value="">Todas</option>
           {ACTIONS.map((a) => (
             <option key={a} value={a}>
-              {a}
+              {auditActionLabel(a)}
             </option>
           ))}
         </select>

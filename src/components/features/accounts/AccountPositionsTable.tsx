@@ -63,9 +63,9 @@ export function AccountPositionsTable({ rows }: { rows: PositionRow[] }) {
                 <SensitiveValue className="tabular-nums">
                   {formatEur(r.marketOrCostEur)}
                 </SensitiveValue>
-                {r.valuedAtCost ? (
+                {r.valuedAtCost || r.position.quantity <= 0 ? (
                   <span className="text-xs tabular-nums text-muted-foreground">
-                    a coste
+                    {r.valuedAtCost ? "a coste" : "—"}
                   </span>
                 ) : (
                   <SensitiveValue className="text-xs tabular-nums text-muted-foreground">

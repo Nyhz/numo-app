@@ -120,6 +120,26 @@ describe("recomputeLotsForAsset", () => {
     }).toThrow(/oversells/);
   });
 
+  // Candado de la norma antiaplicación para el uso real (nunca hay recompra):
+  // una venta con pérdida SIN compra posterior en ventana no debe diferir nada
+  // ni inflar la base. Si un refactor futuro rompe esto, este test lo caza.
+  it("venta con pérdida SIN recompra en ventana: no difiere ni infla la base", () => {
+    const db = makeDb();
+    const { accountId, assetId } = seed(db);
+    insertTrade(db, accountId, assetId, { type: "buy", qty: 10, unitPriceEur: 100, feesEur: 0, tradedAt: Date.UTC(2025, 0, 1) });
+    // Pérdida (100 → 60) y ninguna compra posterior del mismo activo.
+    const sell = insertTrade(db, accountId, assetId, { type: "sell", qty: 10, unitPriceEur: 60, feesEur: 0, tradedAt: Date.UTC(2025, 6, 1) });
+
+    db.transaction((tx) => { recomputeLotsForAsset(tx as unknown as DB, assetId); });
+
+    expect(db.select().from(schema.taxWashSaleAdjustments).all()).toHaveLength(0);
+    const lots = db.select().from(taxLots).where(eq(taxLots.assetId, assetId)).all();
+    expect(lots.every((l) => l.deferredLossAddedEur === 0)).toBe(true);
+    const consumptions = db.select().from(taxLotConsumptions).where(eq(taxLotConsumptions.saleTransactionId, sell)).all();
+    const totalBasis = consumptions.reduce((s, c) => s + c.costBasisEur, 0);
+    expect(totalBasis).toBeCloseTo(1000, 4); // coste crudo, no inflado
+  });
+
   // Regression (QDVE): rounding the per-unit cost to cents and multiplying
   // back by quantity inflated the basis (158 × roundEur(4966.94/158) = 4967.52
   // instead of 4966.94). Cost must be stored as separate gross/fee totals and

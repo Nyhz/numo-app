@@ -166,9 +166,19 @@ export function estimateSavingsCuota(
 
   const cuotaIntegra = applySavingsScale(baseAhorro, scale);
 
+  // La DDI compensa doble imposición solo sobre la renta integrada en la
+  // base: la fracción cubierta por la exención de 1.500 € no tributa aquí y
+  // no genera crédito. Prorrateo global (la exención es conjunta, no por
+  // dividendo). Pendiente de contrastar con Rentanet en la campaña — si el
+  // programa foral acredita el íntegro, revertir a fracción 1.
+  const taxedFraction =
+    report.totals.dividendsGrossEur > 0
+      ? (report.totals.dividendsGrossEur - dividendExemptionApplied) /
+        report.totals.dividendsGrossEur
+      : 0;
   const ddiUncapped = report.dividends.reduce((sum, d) => {
     const cap = ddiTreatyRate(d.sourceCountry ?? "") * d.grossEur;
-    return sum + Math.min(d.withholdingOrigenEur, cap);
+    return sum + Math.min(d.withholdingOrigenEur, cap) * taxedFraction;
   }, 0);
   const ddiCredit = roundEur(Math.min(ddiUncapped, cuotaIntegra));
 

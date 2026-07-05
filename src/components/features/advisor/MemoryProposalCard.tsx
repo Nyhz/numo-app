@@ -43,7 +43,7 @@ export function MemoryProposalCard({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+    <div className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">
           El asesor propone: <span className="uppercase">{OP_LABEL[proposal.op] ?? proposal.op}</span>{" "}

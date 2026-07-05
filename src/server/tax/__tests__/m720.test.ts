@@ -59,6 +59,26 @@ describe("computeInformationalModelsStatus", () => {
     expect(ie?.lastDeclaredEur).toBe(60_000);
   });
 
+  it("una BAJADA de más de €20k no obliga a redeclarar (solo el incremento lo hace)", () => {
+    const db = makeDb();
+    db.insert(taxYearSnapshots).values({
+      id: ulid(), year: 2024,
+      sealedAt: Date.UTC(2025, 0, 1),
+      payloadJson: JSON.stringify({
+        m720: { blocks: [{ country: "IE", type: "broker-securities", valueEur: marketEur(85_000), hasUnvalued: false, hasStale: false, status: "new" }] },
+      }),
+    }).run();
+
+    const blocks: Model720Block[] = [
+      { country: "IE", type: "broker-securities", valueEur: marketEur(60_000), hasUnvalued: false, hasStale: false },
+    ];
+    const res = computeInformationalModelsStatus(db, 2025, blocks);
+    const ie = res.m720.blocks.find((b) => b.country === "IE");
+    expect(ie?.status).toBe("ok");
+    // No debe registrar una presentación fantasma que envenene el histórico.
+    expect(ie?.declared).toBe(false);
+  });
+
   it("flags full_exit when a previously-declared block drops to zero", () => {
     const db = makeDb();
     db.insert(taxYearSnapshots).values({

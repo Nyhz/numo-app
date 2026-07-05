@@ -40,12 +40,15 @@ export function revalidateTradeMutation(accountId: string): void {
 }
 
 export function revalidateCashMovement(accountId: string): void {
+  // Los movimientos `interest` alimentan el informe fiscal y el efectivo en
+  // divisa extranjera cuenta para los saldos M720 → incluir /taxes.
   for (const p of [
     "/",
     "/accounts",
     "/transactions",
     "/audit",
     "/statement",
+    "/taxes",
   ]) {
     revalidatePath(p);
   }
@@ -53,7 +56,9 @@ export function revalidateCashMovement(accountId: string): void {
 }
 
 export function revalidateAssetMetadata(): void {
-  for (const p of ["/", "/assets", "/audit"]) {
+  // El tipo/isin de un activo determina su clase fiscal y bloque M720/M721 →
+  // incluir /taxes para que el informe refleje una re-clasificación.
+  for (const p of ["/", "/assets", "/audit", "/taxes"]) {
     revalidatePath(p);
   }
 }
@@ -68,7 +73,9 @@ export function revalidateWatchlist(): void {
 }
 
 export function revalidateAccountMutation(): void {
-  for (const p of ["/", "/accounts", "/audit"]) {
+  // Un saldo de apertura en divisa extranjera cuenta para los bloques M720 →
+  // incluir /taxes.
+  for (const p of ["/", "/accounts", "/audit", "/taxes"]) {
     revalidatePath(p);
   }
 }

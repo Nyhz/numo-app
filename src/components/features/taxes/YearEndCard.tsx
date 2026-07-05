@@ -2,6 +2,7 @@ import { Card } from "@/src/components/ui/Card";
 import { Badge, type BadgeProps } from "@/src/components/ui/Badge";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur } from "@/src/lib/format";
+import { m720CategoryLabel } from "@/src/lib/labels";
 import {
   unknownCountryNeedsAttention,
   type AnnotatedBlock,
@@ -57,7 +58,9 @@ function BlockList({ title, blocks }: { title: string; blocks: AnnotatedBlock[] 
             <li key={`${b.country}-${b.type}-${i}`} className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-xs">{b.country}</span>
-                <span className="text-xs text-muted-foreground">{b.type}</span>
+                <span className="text-xs text-muted-foreground">
+                  {m720CategoryLabel(b.type)}
+                </span>
                 <Badge variant={status.variant} title={status.hint}>
                   {status.label}
                 </Badge>

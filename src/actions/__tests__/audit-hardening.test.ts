@@ -18,6 +18,7 @@ import { createTransaction } from "../createTransaction";
 import { createDividend } from "../createDividend";
 import { createSwap } from "../createSwap";
 import { createCashMovement } from "../createCashMovement";
+import { createAssetWithdrawal } from "../createAssetWithdrawal";
 import { deleteTransaction } from "../deleteTransaction";
 
 function makeDb(): DB {
@@ -199,6 +200,30 @@ describe("H5 — oversell surfaces as a friendly quantity error", () => {
     if (sell.ok) return;
     expect(sell.error.code).toBe("validation");
     expect(sell.error.fieldErrors?.quantity?.[0]).toMatch(/Solo se poseen 5/);
+  });
+
+  it("una retirada previa (transfer_out) reduce las unidades disponibles para vender", async () => {
+    const db = makeDb();
+    const { accountId, assetId } = await setup(db, "EUR");
+    const buy = await createTransaction(
+      { accountId, assetId, tradeDate: "2026-01-10", side: "buy", quantity: 10, priceNative: 10, currency: "EUR" },
+      db,
+    );
+    expect(buy.ok).toBe(true);
+    const withdraw = await createAssetWithdrawal(
+      { accountId, assetId, tradeDate: "2026-01-15", quantity: 8, valueEur: 96 },
+      db,
+    );
+    expect(withdraw.ok).toBe(true);
+    // Quedan 2 unidades; vender 5 debe fallar con el conteo real (10−8=2),
+    // no colarse por el guard que ignoraba transfer_out.
+    const sell = await createTransaction(
+      { accountId, assetId, tradeDate: "2026-01-20", side: "sell", quantity: 5, priceNative: 12, currency: "EUR" },
+      db,
+    );
+    expect(sell.ok).toBe(false);
+    if (sell.ok) return;
+    expect(sell.error.fieldErrors?.quantity?.[0]).toMatch(/Solo se poseen 2/);
   });
 });
 

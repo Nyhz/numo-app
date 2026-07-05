@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db as defaultDb, type DB } from "../db/client";
 import { assets, auditEvents, type Asset } from "../db/schema";
 import { ACTOR, type ActionResult, revalidateAssetMetadata } from "./_shared";
+import { inferAssetClassTax } from "../server/tax/classification";
 import { updateAssetSchema } from "./updateAsset.schema";
 
 export async function updateAsset(
@@ -43,6 +44,23 @@ export async function updateAsset(
       if (patch.exchange !== undefined) next.exchange = patch.exchange;
       if (patch.providerSymbol !== undefined) next.providerSymbol = patch.providerSymbol;
       if (patch.isActive !== undefined) next.isActive = patch.isActive;
+
+      // La clase fiscal se deriva de type/name/isin y decide la ventana
+      // antiaplicación (2 vs 12 meses) y el bloque M720/M721. Si cambia
+      // cualquiera de esas entradas hay que re-inferirla, o queda congelada en
+      // la del alta y desalinea informe fiscal y sellado.
+      if (
+        patch.assetType !== undefined ||
+        patch.isin !== undefined ||
+        patch.name !== undefined
+      ) {
+        next.assetClassTax = inferAssetClassTax({
+          assetType: next.assetType ?? previous.assetType,
+          name: next.name ?? previous.name,
+          ticker: next.symbol ?? previous.symbol,
+          isin: next.isin ?? previous.isin,
+        });
+      }
 
       tx.update(assets).set(next).where(eq(assets.id, id)).run();
 

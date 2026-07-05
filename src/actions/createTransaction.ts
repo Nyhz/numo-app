@@ -77,7 +77,11 @@ export async function createTransaction(
           (sum, row) =>
             row.transactionType === "buy"
               ? sum + row.quantity
-              : row.transactionType === "sell"
+              : // sell y transfer_out (retirada a custodia externa) drenan
+                // unidades del pool por igual — ignorar transfer_out sobrestima
+                // lo disponible y deja pasar un oversell.
+                row.transactionType === "sell" ||
+                  row.transactionType === "transfer_out"
                 ? sum - row.quantity
                 : sum,
           0,

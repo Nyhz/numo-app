@@ -99,7 +99,7 @@ describe("estimateSavingsCuota (art. 66 foral — compartimentos estancos)", () 
     expect(est.resultadoEstimadoEur).toBe(0);
   });
 
-  it("credits DDI per dividend capped at the treaty rate and at the cuota", () => {
+  it("credits DDI per dividend capped at the treaty rate and prorated by the taxed fraction", () => {
     const est = estimateSavingsCuota(
       input({
         netComputableEur: 0,
@@ -112,9 +112,28 @@ describe("estimateSavingsCuota (art. 66 foral — compartimentos estancos)", () 
     );
     // RCM = 5000 − 1500 = 3500 → cuota 2500×20% + 1000×21% = 710.
     expect(est.cuotaIntegraEur).toBe(710);
-    // Treaty cap 750, then capped again at the cuota íntegra → 710.
-    expect(est.ddiCreditEur).toBe(710);
-    expect(est.resultadoEstimadoEur).toBe(0);
+    // La DDI compensa doble imposición SOLO sobre la renta que Bizkaia grava:
+    // la fracción exenta (1500/5000) no tributa aquí, así que no genera
+    // crédito. Treaty cap 750 × fracción gravada 0,7 = 525.
+    expect(est.ddiCreditEur).toBe(525);
+    expect(est.resultadoEstimadoEur).toBe(185);
+  });
+
+  it("dividendos enteramente bajo la exención de 1.500 € no generan DDI", () => {
+    const est = estimateSavingsCuota(
+      input({
+        netComputableEur: 0,
+        dividendsGrossEur: 21.07,
+        dividends: [
+          // Retención USA de 0,86 € — pero Bizkaia no grava nada de este
+          // dividendo (exento íntegro), luego no hay doble imposición.
+          { grossEur: 21.07, withholdingOrigenEur: 0.86, sourceCountry: "US" },
+        ],
+      }),
+    );
+    expect(est.dividendExemptionAppliedEur).toBeCloseTo(21.07);
+    expect(est.cuotaIntegraEur).toBe(0);
+    expect(est.ddiCreditEur).toBe(0);
   });
 
   it("subtracts destination withholding as payment on account (can go negative)", () => {

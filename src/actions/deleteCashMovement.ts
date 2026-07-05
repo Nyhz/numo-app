@@ -10,6 +10,7 @@ import {
   type ActionResult,
   revalidateCashMovement,
 } from "./_shared";
+import { invalidateDailyBalancesFrom } from "../server/dailyBalances";
 import { recomputeAccountCashBalance } from "../server/recompute";
 
 import { deleteCashMovementSchema } from "./deleteCashMovement.schema";
@@ -51,6 +52,11 @@ export async function deleteCashMovement(
 
       tx.delete(accountCashMovements).where(eq(accountCashMovements.id, id)).run();
       recomputeAccountCashBalance(tx, previous.accountId);
+      // La caja diaria materializada cambia desde la fecha del movimiento.
+      invalidateDailyBalancesFrom(
+        tx,
+        new Date(previous.occurredAt).toISOString().slice(0, 10),
+      );
 
       tx
         .insert(auditEvents)

@@ -70,8 +70,9 @@ export function buildStatementMd(report: StatementReport): string {
       out.push("| Activo | Cantidad | Valor | Coste | P/G |");
       out.push("| --- | ---: | ---: | ---: | ---: |");
       for (const line of group.lines) {
+        const value = `${eur(line.marketValueEur)}${line.valuedAtCost ? " (a coste)" : ""}`;
         out.push(
-          `| ${esc(line.name)} | ${qty(line.quantity)} | ${eur(line.marketValueEur)} | ${eur(line.costEur)} | ${pct(line.pnlPct)} |`,
+          `| ${esc(line.name)} | ${qty(line.quantity)} | ${value} | ${eur(line.costEur)} | ${pct(line.pnlPct)} |`,
         );
       }
       out.push(

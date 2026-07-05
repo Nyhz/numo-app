@@ -6,6 +6,7 @@ import { cn } from "@/src/lib/cn";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import type { AuditEvent } from "@/src/db/schema";
 import { formatDateTime } from "@/src/lib/format";
+import { auditActionLabel, auditEntityLabel, auditSourceLabel } from "@/src/lib/labels";
 
 function parseJson(raw: string | null): Record<string, unknown> | null {
   if (!raw) return null;
@@ -142,13 +143,15 @@ export function AuditTable({ rows }: { rows: AuditEvent[] }) {
                     <td className="px-4 py-2.5 text-foreground">
                       {formatDateTime(r.createdAt)}
                     </td>
-                    <td className="px-4 py-2.5 text-foreground">{r.entityType}</td>
+                    <td className="px-4 py-2.5 text-foreground">
+                      {auditEntityLabel(r.entityType)}
+                    </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
                       {r.entityId}
                     </td>
-                    <td className="px-4 py-2.5 text-foreground">{r.action}</td>
+                    <td className="px-4 py-2.5 text-foreground">{auditActionLabel(r.action)}</td>
                     <td className="px-4 py-2.5 text-foreground">{r.actorType}</td>
-                    <td className="px-4 py-2.5 text-foreground">{r.source}</td>
+                    <td className="px-4 py-2.5 text-foreground">{auditSourceLabel(r.source)}</td>
                   </tr>
                   {isOpen && (
                     <tr className="border-b border-border bg-muted/20 last:border-0">

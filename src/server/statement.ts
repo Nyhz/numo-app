@@ -24,6 +24,8 @@ export type StatementAssetLine = {
   currency: string;
   quantity: number;
   unitPriceEur: number | null;
+  /** Valor: mercado si hay precio, COSTE si aún no lo hay (nunca null/0 —
+   *  una posición sin precio conserva su valor de coste, como el Resumen). */
   marketValueEur: number | null;
   costEur: number;
   pnlEur: number | null;
@@ -31,6 +33,8 @@ export type StatementAssetLine = {
   /** Share of total invested market value (0..1); null when unvalued. */
   weight: number | null;
   valuationDate: string | null;
+  /** True cuando `marketValueEur` es el coste por no haber precio de mercado. */
+  valuedAtCost: boolean;
 };
 
 export type StatementGroup = {
@@ -84,10 +88,13 @@ type LineInput = {
 };
 
 function toLine(input: LineInput, totalMarketValueEur: number): StatementAssetLine {
-  const marketValueEur =
-    input.unitPriceEur != null ? input.quantity * input.unitPriceEur : null;
+  const priced = input.unitPriceEur != null;
   const costEur = input.costEur;
-  const pnlEur = marketValueEur != null ? marketValueEur - costEur : null;
+  // Sin precio ⇒ valor a coste (lo que pagaste), no null/0. Igual que el
+  // Resumen: así el patrimonio del Extracto cuadra con la home y una posición
+  // recién añadida no se lee como −100%.
+  const marketValueEur = priced ? input.quantity * (input.unitPriceEur as number) : costEur;
+  const pnlEur = priced ? marketValueEur - costEur : 0;
   return {
     assetId: input.asset.id,
     name: input.asset.name,
@@ -100,12 +107,10 @@ function toLine(input: LineInput, totalMarketValueEur: number): StatementAssetLi
     marketValueEur,
     costEur,
     pnlEur,
-    pnlPct: pnlEur != null && costEur > 0 ? pnlEur / costEur : null,
-    weight:
-      marketValueEur != null && totalMarketValueEur > 0
-        ? marketValueEur / totalMarketValueEur
-        : null,
+    pnlPct: priced ? (costEur > 0 ? pnlEur / costEur : null) : 0,
+    weight: totalMarketValueEur > 0 ? marketValueEur / totalMarketValueEur : null,
     valuationDate: input.valuationDate,
+    valuedAtCost: !priced,
   };
 }
 
@@ -163,7 +168,7 @@ type AssemblyInput = {
  *  grupos y totales ⇒ paridad al céntimo garantizada por construcción. */
 function assembleReport(input: AssemblyInput): StatementReport {
   const investedMarketValueEur = input.lines.reduce(
-    (acc, l) => acc + (l.unitPriceEur != null ? l.quantity * l.unitPriceEur : 0),
+    (acc, l) => acc + (l.unitPriceEur != null ? l.quantity * l.unitPriceEur : l.costEur),
     0,
   );
   const lines = input.lines.map((l) => toLine(l, investedMarketValueEur));
@@ -185,14 +190,11 @@ function assembleReport(input: AssemblyInput): StatementReport {
     })
     .sort((a, b) => b.totalEur - a.totalEur);
 
-  // P&L pct only over the cost of lines that actually have a valuation —
-  // mixing unvalued cost into the denominator would understate the return.
-  const valuedCostEur = lines.reduce(
-    (acc, l) => acc + (l.marketValueEur != null ? l.costEur : 0),
-    0,
-  );
+  // Toda posición aporta valor (mercado o coste), así que el coste computable
+  // del P/L es el coste total — coherente con el Resumen (denominador = coste
+  // invertido). Una posición a coste aporta P/L 0, no distorsiona.
   const investedCostEur = lines.reduce((acc, l) => acc + l.costEur, 0);
-  const unrealizedPnlEur = investedMarketValueEur - valuedCostEur;
+  const unrealizedPnlEur = investedMarketValueEur - investedCostEur;
   const cashEur = accounts.reduce((acc, a) => acc + a.cashEur, 0);
 
   return {
@@ -203,7 +205,7 @@ function assembleReport(input: AssemblyInput): StatementReport {
       investedMarketValueEur,
       investedCostEur,
       unrealizedPnlEur,
-      unrealizedPnlPct: valuedCostEur > 0 ? unrealizedPnlEur / valuedCostEur : null,
+      unrealizedPnlPct: investedCostEur > 0 ? unrealizedPnlEur / investedCostEur : null,
       cashEur,
       netWorthEur: investedMarketValueEur + cashEur,
       positionsCount: lines.length,
@@ -238,10 +240,11 @@ export async function getStatementReport(
   const investedByAccount = new Map<string, number>();
   for (const row of open) {
     const accountId = assetAccount.get(row.position.assetId);
-    if (!accountId || row.valuationEur == null) continue;
+    if (!accountId) continue;
+    // Valor a mercado o coste (posición sin precio) — coherente con el total.
     investedByAccount.set(
       accountId,
-      (investedByAccount.get(accountId) ?? 0) + row.valuationEur,
+      (investedByAccount.get(accountId) ?? 0) + row.marketOrCostEur,
     );
   }
 
@@ -360,10 +363,12 @@ async function statementReportAsOf(asOf: string, db: DB): Promise<StatementRepor
       valuationDate: valuation?.valuationDate ?? null,
     });
     const accountId = lastAccountByAsset.get(h.assetId);
-    if (!accountId || valuation == null) continue;
+    if (!accountId) continue;
+    // Valor a mercado o coste (sin valoración ≤ corte) — coherente con el total.
+    const valueEur = valuation ? h.quantity * valuation.unitPriceEur : h.costEur;
     investedByAccount.set(
       accountId,
-      (investedByAccount.get(accountId) ?? 0) + h.quantity * valuation.unitPriceEur,
+      (investedByAccount.get(accountId) ?? 0) + valueEur,
     );
   }
 

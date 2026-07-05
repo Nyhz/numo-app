@@ -40,7 +40,15 @@ export default async function TaxYearPage({ params }: { params: Params }) {
   const drift = computeDriftSinceSeal(db, year);
   const baselines = listDeclaredBaselines(db);
   const years = await getTaxYears();
-  const interest = await getInterestForYear(year);
+  // En un año sellado la Previsión debe usar el interés CONGELADO en el sello,
+  // igual que los exports (PDF/CSV) — leer el interés en vivo haría que la
+  // cuota en pantalla divergiera del extracto sellado tras editar un interés.
+  const interest = snapshot
+    ? {
+        grossEur: snapshot.payload.interestEur ?? 0,
+        withholdingEur: snapshot.payload.interestWithholdingEur ?? 0,
+      }
+    : await getInterestForYear(year);
   const prevision = buildPrevision(report, interest);
   const hasUnvalued = [...models.m720.blocks, ...models.m721.blocks].some(
     (b) => b.hasUnvalued,

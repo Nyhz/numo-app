@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
 import { priceHistory } from "../db/schema";
 import { benchmarkByKey, type BenchmarkKey } from "../lib/benchmarks";
@@ -38,9 +38,11 @@ export async function getBenchmarkSeries(
       .where(
         and(eq(priceHistory.symbol, bench.symbol), lte(priceHistory.pricedDateUtc, firstIso)),
       )
-      .orderBy(asc(priceHistory.pricedDateUtc))
-      .all()
-      .at(-1);
+      // La más reciente ≤ inicio: DESC + LIMIT 1 en vez de traer todo el
+      // histórico previo y quedarnos con .at(-1) (miles de filas por índice).
+      .orderBy(desc(priceHistory.pricedDateUtc))
+      .limit(1)
+      .get();
     const rows = db
       .select()
       .from(priceHistory)

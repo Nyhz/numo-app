@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, lte } from "drizzle-orm";
+import { and, asc, inArray, lt, lte } from "drizzle-orm";
 import { roundEur } from "../../lib/money";
 import { marketEur, type MarketEur } from "../../lib/money-types";
 import type { DB } from "../../db/client";
@@ -116,18 +116,42 @@ export function buildYearEndBalances(db: DB, end: number): YearEndBalance[] {
     byKey.set(key, cur);
   }
 
-  const yearEndBalances: YearEndBalance[] = [];
-  for (const entry of byKey.values()) {
-    if (entry.qty <= 1e-9) continue;
-    const account = db.select().from(accounts).where(eq(accounts.id, entry.accountId)).get();
-    const asset = db.select().from(assets).where(eq(assets.id, entry.assetId)).get();
-    const valuation = db
+  // Precarga en lote en vez de 3 queries por posición (N+1): cuentas y activos
+  // a mapas, y la última valoración ≤ 31-dic por activo en UNA query (orden
+  // ascendente ⇒ la última escritura por asset es la más reciente ≤ corte).
+  const held = [...byKey.values()].filter((e) => e.qty > 1e-9);
+  const heldAssetIds = [...new Set(held.map((e) => e.assetId))];
+  const accountById = new Map(db.select().from(accounts).all().map((a) => [a.id, a]));
+  const assetById = new Map(
+    (heldAssetIds.length
+      ? db.select().from(assets).where(inArray(assets.id, heldAssetIds)).all()
+      : []
+    ).map((a) => [a.id, a]),
+  );
+  const valuationByAsset = new Map<
+    string,
+    { unitPriceEur: number; valuationDate: string; priceSource: string | null }
+  >();
+  if (heldAssetIds.length) {
+    const rows = db
       .select()
       .from(assetValuations)
-      .where(and(eq(assetValuations.assetId, entry.assetId), lte(assetValuations.valuationDate, yearEndIso)))
-      .orderBy(desc(assetValuations.valuationDate))
-      .limit(1)
-      .get();
+      .where(
+        and(
+          inArray(assetValuations.assetId, heldAssetIds),
+          lte(assetValuations.valuationDate, yearEndIso),
+        ),
+      )
+      .orderBy(asc(assetValuations.valuationDate))
+      .all();
+    for (const v of rows) valuationByAsset.set(v.assetId, v);
+  }
+
+  const yearEndBalances: YearEndBalance[] = [];
+  for (const entry of held) {
+    const account = accountById.get(entry.accountId);
+    const asset = assetById.get(entry.assetId);
+    const valuation = valuationByAsset.get(entry.assetId) ?? null;
     // Audit T4: a missing valuation must surface as unvalued, never as €0 —
     // a silent zero can suppress the 50k/20k M720 declaration triggers.
     yearEndBalances.push({

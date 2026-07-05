@@ -24,8 +24,9 @@ export function SealYearButton({ year, hasUnvalued = false, hasUnknownCountry = 
     });
     if (!result.ok) {
       setError(result.error.message);
-      // keep modal open so the error is visible
-      return;
+      // Throw so ConfirmModal skips its onOpenChange(false) and stays open with
+      // the error visible — a bare return lets the modal close and hide it.
+      throw new Error(result.error.message);
     }
     router.refresh();
   }

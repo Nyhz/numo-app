@@ -18,6 +18,7 @@ import {
 } from "./_shared";
 import { cashMovementFingerprint } from "./_fingerprint";
 import { roundEur } from "../lib/money";
+import { invalidateDailyBalancesFrom } from "../server/dailyBalances";
 import { recomputeAccountCashBalance } from "../server/recompute";
 
 import {
@@ -119,6 +120,8 @@ export async function createCashMovement(
         .run();
 
       recomputeAccountCashBalance(tx, data.accountId);
+      // La caja diaria materializada cambia desde la fecha del movimiento.
+      invalidateDailyBalancesFrom(tx, data.occurredAt);
 
       const row = tx
         .select()

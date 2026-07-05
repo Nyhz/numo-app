@@ -257,7 +257,14 @@ export function buildStatementReportPdf(
       text(doc, INK);
       doc.text(truncate(line.name, 44), M, cur.y);
       doc.text(fmtQty(line.quantity), M + 280, cur.y, { align: "right" });
-      doc.text(line.marketValueEur != null ? fmtEur(line.marketValueEur) : "—", M + 360, cur.y, { align: "right" });
+      doc.text(
+        line.marketValueEur != null
+          ? `${fmtEur(line.marketValueEur)}${line.valuedAtCost ? " (a coste)" : ""}`
+          : "—",
+        M + 360,
+        cur.y,
+        { align: "right" },
+      );
       doc.text(fmtEur(line.costEur), M + 440, cur.y, { align: "right" });
       const pnl = line.pnlEur ?? 0;
       doc.setFont("helvetica", "bold");

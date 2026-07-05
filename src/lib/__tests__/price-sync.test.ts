@@ -176,6 +176,45 @@ describe("syncPrices", () => {
     expect(valRowsAfter).toHaveLength(1);
   });
 
+  it("no escribe valoración para una posición cerrada (quantity 0) y limpia una fantasma previa", async () => {
+    await db.insert(schema.assets).values({
+      id: "ast_sold",
+      name: "Vendida",
+      assetType: "stock",
+      providerSymbol: "SOLD",
+      currency: "EUR",
+      isActive: true,
+    }).run();
+    await db.insert(schema.assetPositions).values({
+      id: "pos_sold",
+      assetId: "ast_sold",
+      quantity: 0,
+      averageCost: 0,
+    }).run();
+    // Fila fantasma preexistente de un sync anterior.
+    await db.insert(schema.assetValuations).values({
+      id: "val_ghost",
+      assetId: "ast_sold",
+      valuationDate: today,
+      quantity: 0,
+      unitPriceEur: 50,
+      marketValueEur: 0,
+      priceSource: "yahoo",
+    }).run();
+
+    const client = fakeClient({ SOLD: { price: 50, currency: "EUR" } });
+    const summary = await syncPrices(db, asClients(client), today);
+    expect(summary.errors).toEqual([]);
+
+    // La posición está cerrada → ninguna valoración debe sobrevivir para hoy.
+    const valRows = await db
+      .select()
+      .from(schema.assetValuations)
+      .where(eq(schema.assetValuations.assetId, "ast_sold"))
+      .all();
+    expect(valRows).toHaveLength(0);
+  });
+
   it("uses the same-day fx_rates row to compute priceEur", async () => {
     await db.insert(schema.assets).values({
       id: "ast_2",
@@ -184,6 +223,13 @@ describe("syncPrices", () => {
       providerSymbol: "X",
       currency: "USD",
       isActive: true,
+    }).run();
+    // Posición abierta: el cron solo valora posiciones con quantity > 0.
+    await db.insert(schema.assetPositions).values({
+      id: "pos_2",
+      assetId: "ast_2",
+      quantity: 3,
+      averageCost: 40,
     }).run();
 
     const client = fakeClient({

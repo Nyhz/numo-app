@@ -25,11 +25,14 @@ const wipeAppSchema = z.object({
   confirmation: z.literal("WIPE"),
 });
 
-// Wipes everything except the two immutable reference feeds: `assets` and
-// `price_history` (raw Yahoo/CoinGecko bars). FX rates, valuations,
-// positions, transactions, accounts, imports, tax rows, daily balances and
-// audit entries are all truncated — they're all derived from imports and
-// will be rebuilt on the next CSV load.
+// Preserva los catálogos de referencia y los ajustes que no cuelgan del
+// ledger: `assets`, `price_history`, `tax_declared_baselines`, `objectives`,
+// `price_alerts`, `alert_events`, `watchlist_quotes`, `discover_candidates` y
+// las tablas `advisor_*`. Trunca el estado transaccional y derivado: cuentas,
+// transacciones, movimientos de efectivo, valoraciones, posiciones, lotes
+// fiscales, tasas FX, saldos diarios y eventos de auditoría. No genera
+// huérfanos: lo preservado o no referencia cuentas o cuelga de `assets`.
+// (El importador CSV fue eliminado en 2026-06; el registro es solo manual.)
 export async function wipeApp(
   input: unknown,
   db: DB = defaultDb,

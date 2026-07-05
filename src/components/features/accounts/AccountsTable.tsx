@@ -76,8 +76,12 @@ export function AccountsTable({ rows }: { rows: AccountWithTotals[] }) {
             key: "native",
             header: "Saldo (divisa nativa)",
             align: "right",
+            // Solo persistimos el saldo en EUR; para una cuenta en EUR la cifra
+            // nativa ES la misma, pero para una cuenta en otra divisa no la
+            // tenemos — mostrar el importe EUR con el símbolo nativo daría una
+            // cifra falsa (p. ej. «$9.563» sobre 9.563 €).
             cell: (r) =>
-              isCashBearingAccount(r.accountType) ? (
+              isCashBearingAccount(r.accountType) && r.currency === "EUR" ? (
                 <SensitiveValue>
                   {formatMoney(r.currentCashBalanceEur, r.currency)}
                 </SensitiveValue>

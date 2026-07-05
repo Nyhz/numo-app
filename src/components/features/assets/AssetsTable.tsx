@@ -28,6 +28,8 @@ function FreshnessCell({ row }: { row: AssetListRow }) {
     yahoo: { label: "Yahoo", variant: "success" },
     "yahoo-backfill": { label: "Yahoo", variant: "success" },
     coingecko: { label: "CoinGecko", variant: "success" },
+    ft: { label: "Financial Times", variant: "success" },
+    rebuilt: { label: "Reconstruido", variant: "neutral" },
     manual: { label: "Manual", variant: "neutral" },
   };
   const known = KNOWN[f.source];

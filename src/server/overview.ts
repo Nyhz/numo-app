@@ -9,6 +9,7 @@ import {
   type Account,
 } from "../db/schema";
 import { getAccountsSummary } from "./accounts";
+import { materializedNetWorthByDate } from "./dailyBalances";
 import { isCashBearingAccount } from "../lib/domain";
 import { toIsoDate } from "../lib/time";
 import { computeXirr, type CashFlow } from "../lib/xirr";
@@ -305,6 +306,19 @@ async function computeNetWorthSeries(
   const end = new Date();
 
   const startIso = toIsoDate(effectiveStart);
+
+  // Camino rápido: la serie canónica (sin filtro de cuentas) vive
+  // materializada en daily_balances (escrita por el cron nocturno). Si está
+  // fresca — cubre hasta la última valoración — se lee de ahí y solo queda el
+  // tramo barato (contribuciones + TWR). Una mutación la invalida
+  // (delete-forward) y este check falla → cómputo vivo, sin deriva posible.
+  if (!filteringAccounts) {
+    const materialized = materializedNetWorthByDate(db, scopeAssetIdList, startIso);
+    if (materialized) {
+      return assembleNetWorthPoints(materialized, await contributionDeltas(filters, db));
+    }
+  }
+
   const conds = [
     lte(assetValuations.valuationDate, toIsoDate(end)),
     gte(assetValuations.valuationDate, startIso),
@@ -494,9 +508,16 @@ async function computeNetWorthSeries(
     }
   }
 
-  // Cumulative invested EUR per date. Invested_t = cost_basis_bought_up_to_t
-  // - cost_basis_realised_from_sells_up_to_t. For simplicity we sum the
-  // positive part of each trade's cash impact (buys = outflow = -cashImpact).
+  return assembleNetWorthPoints(byDate, await contributionDeltas(filters, db));
+}
+
+/** Date-keyed net-contribution delta (-cashImpact sums to positive for buys). */
+async function contributionDeltas(
+  filters: OverviewFilters,
+  db: DB,
+): Promise<Map<string, number>> {
+  const filteringAccounts =
+    filters.accountIds != null && filters.accountIds.length > 0;
   const txConds = [];
   if (filteringAccounts) {
     txConds.push(inArray(assetTransactions.accountId, filters.accountIds!));
@@ -510,13 +531,24 @@ async function computeNetWorthSeries(
     .where(txConds.length > 0 ? and(...txConds) : undefined)
     .orderBy(asc(assetTransactions.tradedAt))
     .all();
-  // Date-keyed net-contribution delta (-cashImpact sums to positive for buys).
   const deltaByDate = new Map<string, number>();
   for (const t of txs) {
     const iso = toIsoDate(new Date(t.tradedAt));
     deltaByDate.set(iso, (deltaByDate.get(iso) ?? 0) - t.cashImpactEur);
   }
+  return deltaByDate;
+}
 
+/** Tramo común de la serie (invertido acumulado + índice TWR) — compartido
+ *  por el cómputo vivo y el camino materializado (daily_balances) para que
+ *  ambos produzcan puntos idénticos por construcción. */
+function assembleNetWorthPoints(
+  byDate: Map<string, number>,
+  deltaByDate: Map<string, number>,
+): NetWorthPoint[] {
+  // Cumulative invested EUR per date. Invested_t = cost_basis_bought_up_to_t
+  // - cost_basis_realised_from_sells_up_to_t. For simplicity we sum the
+  // positive part of each trade's cash impact (buys = outflow = -cashImpact).
   const sortedDates = [...byDate.keys()].sort();
   let invested = 0;
   // Roll contributions that happened BEFORE our first date into the initial

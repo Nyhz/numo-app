@@ -108,8 +108,12 @@ export function SimulatorPanel({
           ? result.base.find((p) => p.year === fireYear)
           : result.base[result.base.length - 1];
       const startRealEur = startPoint ? startPoint.realValueEur : 0;
+      // Guard el denominador: una inflación de -100% lo anularía (división por
+      // cero → Infinity contaminando toda la decumulación). El campo ya se
+      // acota a >-99, esto es el cinturón de seguridad.
+      const inflationFactor = Math.max(0.01, 1 + form.inflationPct / 100);
       const realReturnPct =
-        ((1 + form.annualReturnPct / 100) / (1 + form.inflationPct / 100) - 1) * 100;
+        ((1 + form.annualReturnPct / 100) / inflationFactor - 1) * 100;
       decumulation = projectDecumulation({
         startEur: startRealEur,
         annualWithdrawalEur: form.annualExpensesEur,
@@ -189,6 +193,7 @@ export function SimulatorPanel({
               value={form.inflationPct}
               onChange={(v) => set("inflationPct", v)}
               step={0.1}
+              min={-99}
               suffix="%/año"
               hint="Para el valor real (poder adquisitivo de hoy)"
             />

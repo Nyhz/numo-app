@@ -143,7 +143,10 @@ function annotate(records: DeclaredRecord[], blocks: Model720Block[]): Annotated
       // category total. Sealed records keep the finer per-block comparison.
       const current =
         record.country === null ? (categoryTotals.get(b.type) ?? 0) : b.valueEur;
-      status = Math.abs(current - record.valueEur) > 20_000 ? "delta_20k" : "ok";
+      // Solo un INCREMENTO >20k obliga a redeclarar; una bajada no (la extinción
+      // total se trata aparte). Con abs() una caída marcaría delta_20k y fijaría
+      // declared=true, envenenando el histórico de baselines de años futuros.
+      status = current - record.valueEur > 20_000 ? "delta_20k" : "ok";
     }
     out.push({
       ...b,

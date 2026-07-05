@@ -9,6 +9,7 @@ import {
   priceHistory,
 } from "../db/schema";
 import { round } from "../lib/money";
+import { invalidateDailyBalancesFrom } from "./dailyBalances";
 import { priceSymbolForAsset } from "../lib/price-sync";
 import { DAY_MS, isWeekday, toIsoDate } from "../lib/time";
 
@@ -50,6 +51,11 @@ export function rebuildValuationsForAsset(
   assetId: string,
   fromIso?: string,
 ): void {
+  // La curva diaria materializada deriva de estas valoraciones: invalidarla
+  // (delete-forward) ANTES de reescribirlas. El lector de la home detecta el
+  // hueco y computa en vivo hasta que el cron nocturno la reconstruya.
+  invalidateDailyBalancesFrom(tx, fromIso ?? "0000-01-01");
+
   const asset = tx.select().from(assets).where(eq(assets.id, assetId)).get();
   if (!asset) return;
 
