@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
+  Building2,
   Coins,
   Crosshair,
   FileText,
@@ -34,6 +35,7 @@ const primaryItems: NavItem[] = [
   { href: "/watchlist", label: "Watchlist", icon: Star },
   { href: "/discover", label: "Descubrir", icon: Lightbulb },
   { href: "/objectives", label: "Objetivos", icon: Crosshair },
+  { href: "/real-estate", label: "Inmuebles", icon: Building2 },
   { href: "/simulador", label: "Simulador", icon: TrendingUp },
   { href: "/asesor", label: "Asesor", icon: Sparkles },
   { href: "/transactions", label: "Transacciones", icon: ArrowLeftRight },
