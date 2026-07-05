@@ -212,11 +212,9 @@ export function buildStatementReportPdf(
   }
   const cols: Col[] = [
     { label: "Activo", x: M },
-    { label: "Símbolo", x: M + 165 },
-    { label: "Cantidad", x: M + 252, align: "right" },
-    { label: "Precio", x: M + 310, align: "right" },
-    { label: "Valor", x: M + 374, align: "right" },
-    { label: "Coste", x: M + 438, align: "right" },
+    { label: "Cantidad", x: M + 280, align: "right" },
+    { label: "Valor", x: M + 360, align: "right" },
+    { label: "Coste", x: M + 440, align: "right" },
     { label: "P/G", x: RIGHT, align: "right" },
   ];
   report.groups.forEach((group, gi) => {
@@ -254,14 +252,10 @@ export function buildStatementReportPdf(
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8.5);
       text(doc, INK);
-      doc.text(truncate(line.name, 26), M, cur.y);
-      text(doc, MUTED);
-      doc.text(truncate(line.symbol ?? "—", 12), M + 165, cur.y);
-      text(doc, INK);
-      doc.text(fmtQty(line.quantity), M + 252, cur.y, { align: "right" });
-      doc.text(line.unitPriceEur != null ? fmtEur(line.unitPriceEur) : "—", M + 310, cur.y, { align: "right" });
-      doc.text(line.marketValueEur != null ? fmtEur(line.marketValueEur) : "—", M + 374, cur.y, { align: "right" });
-      doc.text(fmtEur(line.costEur), M + 438, cur.y, { align: "right" });
+      doc.text(truncate(line.name, 44), M, cur.y);
+      doc.text(fmtQty(line.quantity), M + 280, cur.y, { align: "right" });
+      doc.text(line.marketValueEur != null ? fmtEur(line.marketValueEur) : "—", M + 360, cur.y, { align: "right" });
+      doc.text(fmtEur(line.costEur), M + 440, cur.y, { align: "right" });
       const pnl = line.pnlEur ?? 0;
       doc.setFont("helvetica", "bold");
       text(doc, line.pnlEur == null ? FAINT : toneFor(pnl));
@@ -276,8 +270,8 @@ export function buildStatementReportPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.text(`Subtotal ${assetTypeLabelPdf(group.assetType)}`, M, cur.y);
-    doc.text(fmtEur(group.marketValueEur), M + 374, cur.y, { align: "right" });
-    doc.text(fmtEur(group.costEur), M + 438, cur.y, { align: "right" });
+    doc.text(fmtEur(group.marketValueEur), M + 360, cur.y, { align: "right" });
+    doc.text(fmtEur(group.costEur), M + 440, cur.y, { align: "right" });
     text(doc, toneFor(group.pnlEur));
     doc.text(`${group.pnlEur >= 0 ? "+" : ""}${fmtEur(group.pnlEur)}`, RIGHT, cur.y, { align: "right" });
     text(doc, INK);

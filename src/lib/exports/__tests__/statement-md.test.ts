@@ -74,6 +74,9 @@ describe("buildStatementMd", () => {
     expect(md).toContain("| Patrimonio total | 2200,00 € |");
     expect(md).toContain("| Plusvalía latente | 100,00 € (+6,25 %) |");
     expect(md).toContain("### ETF — 70,6 % de lo invertido");
+    // Sin columnas Símbolo ni Precio — no aportan en un extracto (2026-07-05).
+    expect(md).toContain("| Activo | Cantidad | Valor | Coste | P/G |");
+    expect(md).not.toContain("Símbolo");
     expect(md).toContain("## Cuentas");
     expect(md).toContain("**Patrimonio total: 2200,00 €**");
   });

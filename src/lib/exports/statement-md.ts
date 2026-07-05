@@ -62,15 +62,15 @@ export function buildStatementMd(report: StatementReport): string {
         `### ${assetTypeLabel(group.assetType)} — ${weightPct(group.weight)} de lo invertido`,
       );
       out.push("");
-      out.push("| Activo | Símbolo | Cantidad | Precio | Valor | Coste | P/G |");
-      out.push("| --- | --- | ---: | ---: | ---: | ---: | ---: |");
+      out.push("| Activo | Cantidad | Valor | Coste | P/G |");
+      out.push("| --- | ---: | ---: | ---: | ---: |");
       for (const line of group.lines) {
         out.push(
-          `| ${esc(line.name)} | ${esc(line.symbol)} | ${qty(line.quantity)} | ${eur(line.unitPriceEur)} | ${eur(line.marketValueEur)} | ${eur(line.costEur)} | ${pct(line.pnlPct)} |`,
+          `| ${esc(line.name)} | ${qty(line.quantity)} | ${eur(line.marketValueEur)} | ${eur(line.costEur)} | ${pct(line.pnlPct)} |`,
         );
       }
       out.push(
-        `| **Subtotal ${esc(assetTypeLabel(group.assetType))}** | | | | **${eur(group.marketValueEur)}** | **${eur(group.costEur)}** | **${eur(group.pnlEur)}** |`,
+        `| **Subtotal ${esc(assetTypeLabel(group.assetType))}** | | **${eur(group.marketValueEur)}** | **${eur(group.costEur)}** | **${eur(group.pnlEur)}** |`,
       );
       out.push("");
     }
