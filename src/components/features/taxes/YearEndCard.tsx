@@ -2,7 +2,11 @@ import { Card } from "@/src/components/ui/Card";
 import { Badge, type BadgeProps } from "@/src/components/ui/Badge";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur } from "@/src/lib/format";
-import type { AnnotatedBlock, InformationalModelsStatus } from "@/src/server/tax/m720";
+import {
+  unknownCountryNeedsAttention,
+  type AnnotatedBlock,
+  type InformationalModelsStatus,
+} from "@/src/server/tax/m720";
 import type { TaxDeclaredBaseline } from "@/src/db/schema";
 import { DeclaredBaselinesPanel } from "./DeclaredBaselinesPanel";
 
@@ -57,10 +61,10 @@ function BlockList({ title, blocks }: { title: string; blocks: AnnotatedBlock[] 
                 <Badge variant={status.variant} title={status.hint}>
                   {status.label}
                 </Badge>
-                {b.hasUnknownCountry ? (
+                {unknownCountryNeedsAttention(b) ? (
                   <Badge
                     variant="danger"
-                    title="La cuenta de estos saldos no tiene país asignado — el bloque no se puede contrastar con ninguna geografía. Asigna el país en la página Accounts."
+                    title="El bloque implica presentar el modelo pero la cuenta de estos saldos no tiene país asignado. Asigna el país en la página Accounts."
                   >
                     PAÍS DESCONOCIDO
                   </Badge>
@@ -110,7 +114,7 @@ export function YearEndCard({
     (b) => b.hasUnvalued,
   );
   const hasUnknownCountry = [...models.m720.blocks, ...models.m721.blocks].some(
-    (b) => b.hasUnknownCountry,
+    unknownCountryNeedsAttention,
   );
   return (
     <Card title="Bienes en el extranjero a 31-dic (modelos 720 · 721)">
@@ -135,9 +139,9 @@ export function YearEndCard({
           role="alert"
           className="mx-4 mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
-          Hay saldos de cuentas sin país asignado (bloque «??») — no se pueden
-          contrastar con los umbrales por geografía. Asigna el país a las cuentas
-          afectadas (página Accounts).
+          Hay bloques que implican presentar el modelo con saldos de cuentas sin
+          país asignado (bloque «??»). Asigna el país a las cuentas afectadas
+          (página Accounts).
         </div>
       ) : null}
       <div className="grid gap-4 p-4 md:grid-cols-2">

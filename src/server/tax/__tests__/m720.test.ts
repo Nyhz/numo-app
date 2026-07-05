@@ -8,7 +8,12 @@ import { ulid } from "ulid";
 import * as schema from "../../../db/schema";
 import type { DB } from "../../../db/client";
 import { taxDeclaredBaselines, taxYearSnapshots } from "../../../db/schema";
-import { computeInformationalModelsStatus, type Model720Block } from "../m720";
+import {
+  computeInformationalModelsStatus,
+  unknownCountryNeedsAttention,
+  type AnnotatedBlock,
+  type Model720Block,
+} from "../m720";
 
 function makeDb(): DB {
   const sqlite = new Database(":memory:");
@@ -268,5 +273,35 @@ describe("computeInformationalModelsStatus", () => {
       expect(ie.status).toBe("ok");
       expect(ie.lastDeclaredEur).toBe(80_000);
     });
+  });
+});
+
+describe("unknownCountryNeedsAttention", () => {
+  const block = (
+    status: AnnotatedBlock["status"],
+    hasUnknownCountry: boolean,
+  ): AnnotatedBlock => ({
+    country: "??",
+    type: "crypto",
+    valueEur: marketEur(4_681),
+    hasUnvalued: false,
+    hasStale: false,
+    hasUnknownCountry,
+    status,
+    lastDeclaredEur: null,
+  });
+
+  it("sin obligación (ok) no avisa aunque el país sea desconocido", () => {
+    expect(unknownCountryNeedsAttention(block("ok", true))).toBe(false);
+  });
+
+  it("avisa cuando el bloque implica presentar el modelo", () => {
+    expect(unknownCountryNeedsAttention(block("new", true))).toBe(true);
+    expect(unknownCountryNeedsAttention(block("delta_20k", true))).toBe(true);
+    expect(unknownCountryNeedsAttention(block("full_exit", true))).toBe(true);
+  });
+
+  it("nunca avisa si el país es conocido", () => {
+    expect(unknownCountryNeedsAttention(block("new", false))).toBe(false);
   });
 });

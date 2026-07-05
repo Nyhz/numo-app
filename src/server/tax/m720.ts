@@ -72,6 +72,17 @@ function wasDeclared(b: AnnotatedBlock): boolean {
   return b.declared ?? (b.status === "new" || b.status === "delta_20k");
 }
 
+/** El aviso de país desconocido solo es accionable cuando el bloque implica
+ *  presentar el modelo (alta, redeclaración o extinción). Por debajo de los
+ *  umbrales la geografía es irrelevante: el límite de 50k es conjunto por
+ *  categoría, todos los países a la vez. */
+export function unknownCountryNeedsAttention(b: AnnotatedBlock): boolean {
+  return (
+    b.hasUnknownCountry === true &&
+    (b.status === "new" || b.status === "delta_20k" || b.status === "full_exit")
+  );
+}
+
 /** All filed declarations prior to `year`, newest first. Within a year,
  *  sealed (geographic) records win over a manual category-level baseline. */
 function loadDeclaredRecords(db: DB, year: number): DeclaredRecord[] {
