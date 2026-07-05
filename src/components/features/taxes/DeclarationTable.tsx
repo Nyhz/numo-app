@@ -3,7 +3,7 @@
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
-import { formatDate, formatEur } from "@/src/lib/format";
+import { formatDate, formatEur, formatQuantity } from "@/src/lib/format";
 import type { DeclarationRow } from "@/src/server/tax/report";
 
 type Props = {
@@ -79,7 +79,7 @@ export function DeclarationTable({ rows }: Props) {
                   </td>
                   <td className="text-right tabular-nums">{formatDate(r.acquiredAt)}</td>
                   <td className="text-right tabular-nums">{formatDate(r.soldAt)}</td>
-                  <td className="text-right tabular-nums">{r.qty.toFixed(6)}</td>
+                  <td className="text-right tabular-nums">{formatQuantity(r.qty, { maximumFractionDigits: 6 })}</td>
                   <td className="text-right tabular-nums">
                     <SensitiveValue>{formatEur(r.valorAdquisicionEur)}</SensitiveValue>
                   </td>

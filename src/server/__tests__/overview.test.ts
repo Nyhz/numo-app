@@ -5,7 +5,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { describe, expect, it } from "vitest";
 import * as schema from "../../db/schema";
 import type { DB } from "../../db/client";
-import { getNetWorthSeries } from "../overview";
+import { getNetWorthSeries, getOverviewKpis } from "../overview";
 
 function makeDb(): DB {
   const sqlite = new Database(":memory:");
@@ -101,6 +101,55 @@ describe("getNetWorthSeries — sold-out positions", () => {
 
     // TWR: the sale is a -50 contribution offset by the -50 value drop, so
     // the index must stay flat — selling is not a gain.
+    expect(byDate.get("2026-01-08")?.performanceIndex).toBeCloseTo(100, 6);
+  });
+
+  it("una retirada (transfer_out) deja de aportar valor sin contar como pérdida TWR", async () => {
+    const db = makeDb();
+    seedAccount(db);
+    db.insert(schema.assets)
+      .values([
+        { id: "ast_open", name: "OPEN", assetType: "stock", currency: "EUR" },
+        { id: "ast_out", name: "OUT", assetType: "stock", currency: "EUR" },
+      ])
+      .run();
+
+    seedTrade(db, "tx_b1", "ast_open", "buy", "2026-01-05", 1, 100);
+    seedTrade(db, "tx_b2", "ast_out", "buy", "2026-01-05", 1, 50);
+    // Retirada total el jueves 8: mismas mecánicas de flujo que una venta
+    // (cashImpactEur = +valor) pero sin par fiscal.
+    db.insert(schema.assetTransactions)
+      .values({
+        id: "tx_t1",
+        accountId: "acc_1",
+        assetId: "ast_out",
+        transactionType: "transfer_out",
+        tradedAt: noonMs("2026-01-08"),
+        quantity: 1,
+        unitPrice: 50,
+        tradeCurrency: "EUR",
+        fxRateToEur: 1,
+        tradeGrossAmount: 50,
+        tradeGrossAmountEur: 50,
+        cashImpactEur: 50,
+        netAmountEur: 50,
+      })
+      .run();
+
+    for (const iso of ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"]) {
+      seedValuation(db, "ast_open", iso, 1, 100);
+    }
+    for (const iso of ["2026-01-05", "2026-01-06", "2026-01-07"]) {
+      seedValuation(db, "ast_out", iso, 1, 50);
+    }
+
+    const series = await getNetWorthSeries({ range: "ALL" }, db);
+    const byDate = new Map(series.map((p) => [p.date, p]));
+
+    expect(byDate.get("2026-01-07")?.valueEur).toBe(150);
+    // El valor retirado no puede arrastrarse a fechas posteriores…
+    expect(byDate.get("2026-01-08")?.valueEur).toBe(100);
+    // …ni leerse como pérdida: la salida es un flujo, el índice queda plano.
     expect(byDate.get("2026-01-08")?.performanceIndex).toBeCloseTo(100, 6);
   });
 
@@ -231,5 +280,45 @@ describe("getNetWorthSeries — cost fallback for unpriced holdings", () => {
     // Once the real NAV lands it takes over (1000 + 7710).
     const last = series.find((s) => s.date === "2026-01-08");
     expect(last!.valueEur).toBeCloseTo(8710, 2);
+  });
+});
+
+describe("getOverviewKpis — % de plusvalía latente", () => {
+  it("el % es (mercado − coste) / coste, no la rentabilidad TWR de la serie", async () => {
+    const db = makeDb();
+    seedAccount(db);
+    db.insert(schema.assets)
+      .values([
+        { id: "ast_hold", name: "HOLD", assetType: "stock", currency: "EUR" },
+        { id: "ast_gone", name: "GONE", assetType: "stock", currency: "EUR" },
+      ])
+      .run();
+
+    // HOLD: comprado a 100, hoy vale 80 → latente -20 € (-20 %).
+    seedTrade(db, "tx_h1", "ast_hold", "buy", "2026-01-05", 1, 100);
+    db.insert(schema.assetPositions)
+      .values({
+        id: "pos_hold", assetId: "ast_hold", quantity: 1,
+        averageCost: 100, averageCostNative: 100,
+        totalCostNative: 100, totalCostEur: 100,
+      })
+      .run();
+    // GONE: pérdida REALIZADA enorme que hunde el TWR de la serie pero no
+    // debe contaminar el % latente de lo que sigue abierto.
+    seedTrade(db, "tx_g1", "ast_gone", "buy", "2026-01-05", 1, 100);
+    seedTrade(db, "tx_g2", "ast_gone", "sell", "2026-01-07", 1, 10);
+
+    seedValuation(db, "ast_hold", "2026-01-05", 1, 100);
+    seedValuation(db, "ast_hold", "2026-01-06", 1, 90);
+    seedValuation(db, "ast_hold", "2026-01-07", 1, 80);
+    seedValuation(db, "ast_gone", "2026-01-05", 1, 100);
+    seedValuation(db, "ast_gone", "2026-01-06", 1, 50);
+
+    const kpis = await getOverviewKpis({ range: "ALL" }, db);
+
+    expect(kpis.unrealizedPnlEur).toBeCloseTo(-20, 2);
+    // Antes del fix esto devolvía el TWR (≈ -55 %) — incoherente con la
+    // etiqueta «Sobre el coste de compra» y con las filas de posiciones.
+    expect(kpis.unrealizedPnlPct).toBeCloseTo(-0.2, 6);
   });
 });

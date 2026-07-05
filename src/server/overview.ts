@@ -198,19 +198,16 @@ export async function getOverviewKpis(
     pctBase = startValueTotal + Math.max(contributionsInRange, 0);
   }
 
-  // Align the KPI percent with the Portfolio-evolution chart: both use the
-  // time-weighted return so deposits/withdrawals don't move the number. The
-  // EUR figure stays as true unrealized P&L (market value vs. cost / range
-  // baseline), so the card reads "€X gained, portfolio returned Y%".
-  let unrealizedPnlPct: number | null =
+  // El % acompaña al importe latente: (mercado − coste) / coste, coherente
+  // con el subtítulo «Sobre el coste de compra» y con las filas de posiciones.
+  // La rentabilidad time-weighted vive en la gráfica de evolución y la TIR en
+  // su propia tarjeta — mezclarla aquí hacía divergir importe y porcentaje en
+  // cuanto había resultados realizados (auditoría 2026-07-05).
+  const unrealizedPnlPct: number | null =
     pctBase > 0 ? unrealizedPnlEur / pctBase : null;
   let xirrPct: number | null = null;
   if (positions.length > 0) {
     const series = await getNetWorthSeries(filters, db);
-    const last = series.at(-1);
-    if (last && Number.isFinite(last.performanceIndex)) {
-      unrealizedPnlPct = last.performanceIndex / 100 - 1;
-    }
     xirrPct = xirrFromSeries(series);
   }
   return {
@@ -457,7 +454,12 @@ async function computeNetWorthSeries(
     .all();
   const tradesByAsset = new Map<string, Array<{ tradedAt: number; signedQty: number }>>();
   for (const t of qtyTrades) {
-    if (t.transactionType !== "buy" && t.transactionType !== "sell") continue;
+    if (
+      t.transactionType !== "buy" &&
+      t.transactionType !== "sell" &&
+      t.transactionType !== "transfer_out"
+    )
+      continue;
     const list = tradesByAsset.get(t.assetId) ?? [];
     list.push({
       tradedAt: t.tradedAt,

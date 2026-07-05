@@ -103,7 +103,13 @@ export function buildYearEndBalances(db: DB, end: number): YearEndBalance[] {
     .all();
   const byKey = new Map<string, { accountId: string; assetId: string; qty: number }>();
   for (const t of ledgerRows) {
-    if (t.transactionType !== "buy" && t.transactionType !== "sell") continue;
+    if (
+      t.transactionType !== "buy" &&
+      t.transactionType !== "sell" &&
+      // transfer_out: la custodia salió de la cuenta — deja de declararse aquí.
+      t.transactionType !== "transfer_out"
+    )
+      continue;
     const key = `${t.accountId}::${t.assetId}`;
     const cur = byKey.get(key) ?? { accountId: t.accountId, assetId: t.assetId, qty: 0 };
     cur.qty += (t.transactionType === "buy" ? 1 : -1) * t.quantity;

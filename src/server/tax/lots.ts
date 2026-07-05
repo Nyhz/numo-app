@@ -78,7 +78,7 @@ export function recomputeLotsForAsset(tx: DbOrTx, assetId: string): void {
     .where(eq(assetTransactions.assetId, assetId))
     .orderBy(
       asc(assetTransactions.tradedAt),
-      asc(assetTransactions.transactionType), // buys ("buy") before sells ("sell") on same timestamp
+      asc(assetTransactions.transactionType), // buys ("buy") before disposals ("sell", "transfer_out") on same timestamp
       asc(assetTransactions.id),
     )
     .all();
@@ -144,7 +144,13 @@ export function recomputeLotsForAsset(tx: DbOrTx, assetId: string): void {
       continue;
     }
 
-    if (row.transactionType !== "sell") continue;
+    // transfer_out (retirada a custodia externa) consume lotes FIFO como una
+    // venta — las unidades dejan de existir para este ledger — pero sin
+    // consumo fiscal: ni par FIFO en el informe ni antiaplicación. El coste
+    // de lo retirado abandona el sistema sin generar resultado.
+    const isDisposal =
+      row.transactionType === "sell" || row.transactionType === "transfer_out";
+    if (!isDisposal) continue;
 
     let remaining = row.quantity;
     const consumptions: { lot: MutableLot; qty: number; cost: number }[] = [];
@@ -172,23 +178,27 @@ export function recomputeLotsForAsset(tx: DbOrTx, assetId: string): void {
 
     if (remaining > EPS) {
       throw new Error(
-        `tax-lots: sell ${row.id} oversells asset ${assetId} by ${remaining} units — missing buy trades?`,
+        `tax-lots: ${row.transactionType} ${row.id} oversells asset ${assetId} by ${remaining} units — missing buy trades?`,
       );
     }
 
     for (const c of consumptions) {
-      tx.insert(taxLotConsumptions).values({
-        id: ulid(),
-        saleTransactionId: row.id,
-        lotId: c.lot.id,
-        qtyConsumed: c.qty,
-        costBasisEur: c.cost,
-      }).run();
+      if (row.transactionType === "sell") {
+        tx.insert(taxLotConsumptions).values({
+          id: ulid(),
+          saleTransactionId: row.id,
+          lotId: c.lot.id,
+          qtyConsumed: c.qty,
+          costBasisEur: c.cost,
+        }).run();
+      }
       tx.update(taxLots).set({
         remainingQty: c.lot.remainingQty,
         deferredLossAddedEur: roundEur(c.lot.deferredLossAddedEur),
       }).where(eq(taxLots.id, c.lot.id)).run();
     }
+
+    if (row.transactionType !== "sell") continue;
 
     // 3. Norma antiaplicación (art. 43.g/h NF 13/2013): a loss is deferred if
     //    homogeneous values were acquired within the calendar window around

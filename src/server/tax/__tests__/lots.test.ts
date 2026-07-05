@@ -271,3 +271,74 @@ describe("recomputeLotsForAsset corrupt-row handling", () => {
     }).toThrow(/non-positive quantity/);
   });
 });
+
+// Retirada de activo (transfer_out): consume lotes FIFO sin generar par
+// fiscal — el coste de las unidades retiradas sale del sistema sin resultado.
+describe("recomputeLotsForAsset transfer_out", () => {
+  function insertTransferOut(db: DB, accountId: string, assetId: string, opts: {
+    qty: number; valueEur: number; tradedAt: number;
+  }): string {
+    const id = ulid();
+    db.insert(assetTransactions).values({
+      id, accountId, assetId,
+      transactionType: "transfer_out",
+      tradedAt: opts.tradedAt,
+      quantity: opts.qty, unitPrice: opts.valueEur / opts.qty,
+      tradeCurrency: "EUR", fxRateToEur: 1,
+      tradeGrossAmount: opts.valueEur, tradeGrossAmountEur: opts.valueEur,
+      cashImpactEur: opts.valueEur,
+      feesAmount: 0, feesAmountEur: 0, netAmountEur: opts.valueEur,
+      isListed: false, source: "manual",
+    }).run();
+    return id;
+  }
+
+  it("consume lotes FIFO sin escribir consumos ni pares fiscales", () => {
+    const db = makeDb();
+    const { accountId, assetId } = seed(db);
+    const buy1 = insertTrade(db, accountId, assetId, { type: "buy", qty: 10, unitPriceEur: 100, feesEur: 0, tradedAt: Date.UTC(2025, 0, 1) });
+    const buy2 = insertTrade(db, accountId, assetId, { type: "buy", qty: 10, unitPriceEur: 120, feesEur: 0, tradedAt: Date.UTC(2025, 1, 1) });
+    insertTransferOut(db, accountId, assetId, { qty: 15, valueEur: 1650, tradedAt: Date.UTC(2025, 6, 1) });
+
+    db.transaction((tx) => { recomputeLotsForAsset(tx as unknown as DB, assetId); });
+
+    const lots = db.select().from(taxLots).where(eq(taxLots.assetId, assetId)).all();
+    const firstLot = lots.find((l) => l.originTransactionId === buy1)!;
+    const secondLot = lots.find((l) => l.originTransactionId === buy2)!;
+    expect(firstLot.remainingQty).toBe(0);
+    expect(secondLot.remainingQty).toBe(5);
+    // Sin rastro fiscal: ni consumos (pares FIFO) ni ajustes antiaplicación.
+    expect(db.select().from(taxLotConsumptions).all()).toHaveLength(0);
+    expect(db.select().from(schema.taxWashSaleAdjustments).all()).toHaveLength(0);
+  });
+
+  it("una venta posterior consume solo lo que sobrevive a la retirada", () => {
+    const db = makeDb();
+    const { accountId, assetId } = seed(db);
+    insertTrade(db, accountId, assetId, { type: "buy", qty: 10, unitPriceEur: 100, feesEur: 0, tradedAt: Date.UTC(2025, 0, 1) });
+    const buy2 = insertTrade(db, accountId, assetId, { type: "buy", qty: 10, unitPriceEur: 200, feesEur: 0, tradedAt: Date.UTC(2025, 1, 1) });
+    // La retirada drena el primer lote entero: la venta debe caer en el segundo.
+    insertTransferOut(db, accountId, assetId, { qty: 10, valueEur: 1100, tradedAt: Date.UTC(2025, 2, 1) });
+    const sell = insertTrade(db, accountId, assetId, { type: "sell", qty: 5, unitPriceEur: 130, feesEur: 0, tradedAt: Date.UTC(2025, 6, 1) });
+
+    db.transaction((tx) => { recomputeLotsForAsset(tx as unknown as DB, assetId); });
+
+    const consumptions = db.select().from(taxLotConsumptions).where(eq(taxLotConsumptions.saleTransactionId, sell)).all();
+    expect(consumptions).toHaveLength(1);
+    expect(consumptions[0].qtyConsumed).toBe(5);
+    // Coste del segundo lote (200 €/ud), no del primero ya retirado.
+    expect(consumptions[0].costBasisEur).toBeCloseTo(1000, 2);
+    const lot2 = db.select().from(taxLots).where(eq(taxLots.originTransactionId, buy2)).get();
+    expect(lot2?.remainingQty).toBe(5);
+  });
+
+  it("lanza tax-lots: si la retirada supera las unidades poseídas", () => {
+    const db = makeDb();
+    const { accountId, assetId } = seed(db);
+    insertTrade(db, accountId, assetId, { type: "buy", qty: 10, unitPriceEur: 100, feesEur: 0, tradedAt: Date.UTC(2025, 0, 1) });
+    insertTransferOut(db, accountId, assetId, { qty: 11, valueEur: 1100, tradedAt: Date.UTC(2025, 6, 1) });
+    expect(() => {
+      db.transaction((tx) => { recomputeLotsForAsset(tx as unknown as DB, assetId); });
+    }).toThrow(/tax-lots:/);
+  });
+});

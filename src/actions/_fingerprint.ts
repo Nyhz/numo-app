@@ -64,6 +64,24 @@ export function swapFingerprint(parts: {
   return createHash("sha256").update(key).digest("hex");
 }
 
+export function assetWithdrawalFingerprint(parts: {
+  accountId: string;
+  assetId: string;
+  tradeDate: string;
+  quantity: number;
+  valueEur: number;
+}): string {
+  const key = [
+    "manual-asset-withdrawal",
+    parts.accountId,
+    parts.assetId,
+    parts.tradeDate,
+    parts.quantity.toFixed(8),
+    parts.valueEur.toFixed(8),
+  ].join("|");
+  return createHash("sha256").update(key).digest("hex");
+}
+
 export function cashMovementFingerprint(parts: {
   accountId: string;
   kind: string;

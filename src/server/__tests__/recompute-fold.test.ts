@@ -58,4 +58,18 @@ describe("foldLedger", () => {
     expect(fold.qty).toBe(5);
     expect(fold.totalCostEur).toBeCloseTo(500);
   });
+
+  it("una retirada (transfer_out) reduce cantidad y coste como una venta", () => {
+    const transferOut: LedgerTrade = { ...sell(4), transactionType: "transfer_out" };
+    const fold = foldLedger([buy(10, 1000), transferOut]);
+    expect(fold.qty).toBe(6);
+    expect(fold.totalCostEur).toBeCloseTo(600);
+  });
+
+  it("una retirada total deja la posición cerrada", () => {
+    const transferOut: LedgerTrade = { ...sell(10), transactionType: "transfer_out" };
+    const fold = foldLedger([buy(10, 1000), transferOut]);
+    expect(fold.qty).toBe(0);
+    expect(fold.totalCostEur).toBeCloseTo(0);
+  });
 });

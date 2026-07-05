@@ -134,7 +134,8 @@ export function rebuildValuationsForAsset(
     while (tradeIdx < trades.length && trades[tradeIdx].tradedAt <= dayEnd) {
       const t = trades[tradeIdx];
       if (t.transactionType === "buy") runningQty += t.quantity;
-      else if (t.transactionType === "sell") runningQty -= t.quantity;
+      else if (t.transactionType === "sell" || t.transactionType === "transfer_out")
+        runningQty -= t.quantity;
       tradeIdx++;
     }
     if (lastPrice == null || lastFx == null) continue;

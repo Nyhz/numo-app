@@ -35,6 +35,9 @@ export const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   buy: "Compra",
   sell: "Venta",
   dividend: "Dividendo",
+  // Distinto del kind de caja "transfer-out": esto es salida de UNIDADES de
+  // un activo a custodia externa, sin venta fiscal ni movimiento de efectivo.
+  transfer_out: "Retirada de activo",
 };
 
 export function transactionTypeLabel(type: string): string {

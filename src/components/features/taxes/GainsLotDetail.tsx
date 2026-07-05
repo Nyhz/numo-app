@@ -1,5 +1,5 @@
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
-import { formatDate, formatEur } from "@/src/lib/format";
+import { formatDate, formatEur, formatQuantity } from "@/src/lib/format";
 import type { SaleReportRow } from "@/src/server/tax/report";
 
 export function GainsLotDetail({ sale }: { sale: SaleReportRow }) {
@@ -18,7 +18,7 @@ export function GainsLotDetail({ sale }: { sale: SaleReportRow }) {
           {sale.consumedLots.map((l) => (
             <tr key={l.lotId} className="border-t border-border/20">
               <td>{formatDate(l.acquiredAt)}</td>
-              <td className="text-right tabular-nums">{l.qtyConsumed.toFixed(6)}</td>
+              <td className="text-right tabular-nums">{formatQuantity(l.qtyConsumed, { maximumFractionDigits: 6 })}</td>
               <td className="text-right tabular-nums">
                 <SensitiveValue>{formatEur(l.costBasisEur)}</SensitiveValue>
               </td>

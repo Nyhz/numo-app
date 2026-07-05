@@ -48,7 +48,12 @@ export function foldLedger(rows: LedgerTrade[]): LedgerFold {
         row.tradeGrossAmount +
         (row.fxRateToEur > 0 ? row.feesAmountEur / row.fxRateToEur : row.feesAmount);
       totalCostEur += row.tradeGrossAmountEur + row.feesAmountEur;
-    } else if (row.transactionType === "sell") {
+    } else if (
+      row.transactionType === "sell" ||
+      // transfer_out: retirada a custodia externa — las unidades y su coste
+      // salen del pool igual que en una venta, sin resultado fiscal asociado.
+      row.transactionType === "transfer_out"
+    ) {
       if (qty <= 0) {
         // Defensive: selling with no position; treat as no-op for cost basis.
         qty -= row.quantity;

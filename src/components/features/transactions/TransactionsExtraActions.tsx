@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeftRight, TrendingUp } from "lucide-react";
+import { ArrowLeftRight, ArrowUpFromLine, TrendingUp } from "lucide-react";
 import { Button } from "@/src/components/ui/Button";
 import { CreateSwapModal } from "./CreateSwapModal";
 import { CreateDividendModal } from "./CreateDividendModal";
+import { CreateWithdrawalModal } from "./CreateWithdrawalModal";
 
 type Props = {
   accounts: { id: string; name: string }[];
@@ -14,6 +15,7 @@ type Props = {
 export function TransactionsExtraActions({ accounts, assets }: Props) {
   const [swapOpen, setSwapOpen] = React.useState(false);
   const [dividendOpen, setDividendOpen] = React.useState(false);
+  const [withdrawalOpen, setWithdrawalOpen] = React.useState(false);
   const disabled = accounts.length === 0 || assets.length === 0;
 
   return (
@@ -37,6 +39,15 @@ export function TransactionsExtraActions({ accounts, assets }: Props) {
           <ArrowLeftRight className="h-4 w-4" />
           Registrar swap
         </Button>
+        <Button
+          size="md"
+          variant="secondary"
+          onClick={() => setWithdrawalOpen(true)}
+          disabled={disabled}
+        >
+          <ArrowUpFromLine className="h-4 w-4" />
+          Retirar activo
+        </Button>
       </div>
       <CreateSwapModal
         open={swapOpen}
@@ -47,6 +58,12 @@ export function TransactionsExtraActions({ accounts, assets }: Props) {
       <CreateDividendModal
         open={dividendOpen}
         onOpenChange={setDividendOpen}
+        accounts={accounts}
+        assets={assets}
+      />
+      <CreateWithdrawalModal
+        open={withdrawalOpen}
+        onOpenChange={setWithdrawalOpen}
         accounts={accounts}
         assets={assets}
       />

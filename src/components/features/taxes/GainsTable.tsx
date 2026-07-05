@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
-import { formatDate, formatEur } from "@/src/lib/format";
+import { formatDate, formatEur, formatQuantity } from "@/src/lib/format";
 import type { SaleReportRow, TaxReport } from "@/src/server/tax/report";
 import { GainsLotDetail } from "./GainsLotDetail";
 
@@ -109,7 +109,7 @@ export function GainsTable({ sales, excludedSales }: Props) {
                         </Badge>
                       ) : null}
                     </td>
-                    <td className="text-right tabular-nums">{s.quantity.toFixed(6)}</td>
+                    <td className="text-right tabular-nums">{formatQuantity(s.quantity, { maximumFractionDigits: 6 })}</td>
                     <td className="text-right tabular-nums">
                       <SensitiveValue>{formatEur(s.proceedsEur)}</SensitiveValue>
                     </td>

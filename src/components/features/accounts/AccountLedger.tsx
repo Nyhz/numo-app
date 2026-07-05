@@ -47,6 +47,7 @@ function kindVariant(label: string): React.ComponentProps<typeof Badge>["variant
     case "withdrawal":
     case "fee":
     case "transfer-out":
+    case "transfer_out":
       return "warning";
     default:
       return "neutral";
