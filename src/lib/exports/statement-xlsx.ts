@@ -139,7 +139,10 @@ export async function buildStatementXlsx(report: StatementReport): Promise<Uint8
     name: "TOTAL",
     cashEur: report.totals.cashEur,
     investedEur: report.totals.investedMarketValueEur,
-    totalEur: report.totals.netWorthEur,
+    // Total atribuible a cuentas = efectivo + invertido. El patrimonio neto
+    // (que incluye el equity inmobiliario, ajeno a toda cuenta) vive en la
+    // hoja de resumen; aquí sumaría de más y la columna no cuadraría.
+    totalEur: report.totals.cashEur + report.totals.investedMarketValueEur,
   });
   accountsTotal.font = { bold: true };
   accountsTotal.getCell("cashEur").numFmt = EUR_FMT;
