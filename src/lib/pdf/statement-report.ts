@@ -84,7 +84,9 @@ export function buildStatementReportPdf(
     {
       kicker: "Patrimonio total",
       value: fmtEur(t.netWorthEur),
-      sub: `efectivo ${fmtEur(t.cashEur)} · invertido ${fmtEur(t.investedMarketValueEur)}`,
+      sub:
+        `efectivo ${fmtEur(t.cashEur)} · invertido ${fmtEur(t.investedMarketValueEur)}` +
+        (t.realEstateEquityEur > 0 ? ` · inmuebles ${fmtEur(t.realEstateEquityEur)}` : ""),
     },
     {
       kicker: "Coste de lo invertido",
@@ -287,6 +289,46 @@ export function buildStatementReportPdf(
     text(doc, INK);
     cur.y += 28;
   });
+
+  // ── Inmuebles ─────────────────────────────────────────────────────────────
+  if (report.realEstate.length > 0) {
+    sectionTitle(cur, ++sectionNum, "Inmuebles");
+    const recols: Col[] = [
+      { label: "Inmueble", x: M },
+      { label: "Valor", x: M + 190, align: "right" },
+      { label: "Valorado a", x: M + 280 },
+      { label: "Hipoteca pendiente", x: M + 400, align: "right" },
+      { label: "Equity", x: RIGHT, align: "right" },
+    ];
+    tableHead(cur, recols);
+    report.realEstate.forEach((line, i) => {
+      room(20, (c) => tableHead(c, recols));
+      zebra(cur, i, 17);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      text(doc, INK);
+      doc.text(truncate(line.name, 34), M, cur.y);
+      doc.text(fmtEur(line.valueEur), M + 190, cur.y, { align: "right" });
+      text(doc, MUTED);
+      doc.text(line.valuationAsOf ?? "compra", M + 280, cur.y);
+      text(doc, INK);
+      doc.text(fmtEur(line.outstandingEur), M + 400, cur.y, { align: "right" });
+      doc.setFont("helvetica", "bold");
+      doc.text(fmtEur(line.equityEur), RIGHT, cur.y, { align: "right" });
+      text(doc, INK);
+      cur.y += 17;
+    });
+
+    room(20);
+    cur.y += 3;
+    totalRule(cur);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Total inmuebles", M, cur.y);
+    doc.text(fmtEur(t.realEstateEquityEur), RIGHT, cur.y, { align: "right" });
+    text(doc, INK);
+    cur.y += 28;
+  }
 
   // ── Cuentas ───────────────────────────────────────────────────────────────
   sectionTitle(cur, ++sectionNum, "Cuentas");

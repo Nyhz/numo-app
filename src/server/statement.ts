@@ -14,6 +14,9 @@ import { round, roundEur } from "../lib/money";
 import { foldLedger } from "./recompute";
 import { listAccounts } from "./accounts";
 import { listPositions } from "./positions";
+import { getStatementRealEstate, type StatementRealEstateLine } from "./realEstate";
+
+export type { StatementRealEstateLine };
 
 export type StatementAssetLine = {
   assetId: string;
@@ -65,6 +68,7 @@ export type StatementTotals = {
   netWorthEur: number;
   positionsCount: number;
   accountsCount: number;
+  realEstateEquityEur: number;
 };
 
 export type StatementReport = {
@@ -77,6 +81,7 @@ export type StatementReport = {
   totals: StatementTotals;
   groups: StatementGroup[];
   accounts: StatementAccountLine[];
+  realEstate: StatementRealEstateLine[];
 };
 
 type LineInput = {
@@ -162,6 +167,7 @@ type AssemblyInput = {
   lines: LineInput[]; // solo posiciones abiertas (quantity > 0)
   accounts: Array<Omit<StatementAccountLine, "investedEur" | "totalEur">>;
   investedByAccount: Map<string, number>;
+  realEstate: { lines: StatementRealEstateLine[]; totalEquityEur: number };
 };
 
 /** Tramo común a ambos caminos (actual y as-of): misma matemática de líneas,
@@ -207,12 +213,14 @@ function assembleReport(input: AssemblyInput): StatementReport {
       unrealizedPnlEur,
       unrealizedPnlPct: investedCostEur > 0 ? unrealizedPnlEur / investedCostEur : null,
       cashEur,
-      netWorthEur: investedMarketValueEur + cashEur,
+      netWorthEur: investedMarketValueEur + cashEur + input.realEstate.totalEquityEur,
       positionsCount: lines.length,
       accountsCount: accounts.length,
+      realEstateEquityEur: input.realEstate.totalEquityEur,
     },
     groups,
     accounts,
+    realEstate: input.realEstate.lines,
   };
 }
 
@@ -222,9 +230,10 @@ export async function getStatementReport(
 ): Promise<StatementReport> {
   if (opts.asOf) return statementReportAsOf(opts.asOf, db);
 
-  const [positions, accountsList] = await Promise.all([
+  const [positions, accountsList, realEstate] = await Promise.all([
     listPositions(db),
     listAccounts(db),
+    getStatementRealEstate(db),
   ]);
   const assetAccount = primaryAccountByAsset(db);
 
@@ -259,6 +268,7 @@ export async function getStatementReport(
       cashEur: a.totalBalanceEur,
     })),
     investedByAccount,
+    realEstate,
   });
 }
 
@@ -313,6 +323,7 @@ async function valuationsAsOf(
  */
 async function statementReportAsOf(asOf: string, db: DB): Promise<StatementReport> {
   const cutoffMs = new Date(`${asOf}T23:59:59.999`).getTime();
+  const realEstate = await getStatementRealEstate(db, asOf);
 
   const trades = await db
     .select()
@@ -405,5 +416,6 @@ async function statementReportAsOf(asOf: string, db: DB): Promise<StatementRepor
     lines: lineInputs,
     accounts: accountLines,
     investedByAccount,
+    realEstate,
   });
 }

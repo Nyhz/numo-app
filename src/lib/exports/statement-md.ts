@@ -57,6 +57,9 @@ export function buildStatementMd(report: StatementReport): string {
   out.push(
     `| Plusvalía latente | ${eur(t.unrealizedPnlEur)}${t.unrealizedPnlPct != null ? ` (${pct(t.unrealizedPnlPct)})` : ""} |`,
   );
+  if (t.realEstateEquityEur > 0) {
+    out.push(`| Patrimonio inmobiliario (equity) | ${eur(t.realEstateEquityEur)} |`);
+  }
   out.push("");
 
   if (report.groups.length > 0) {
@@ -80,6 +83,19 @@ export function buildStatementMd(report: StatementReport): string {
       );
       out.push("");
     }
+  }
+
+  if (report.realEstate.length > 0) {
+    out.push("### Inmuebles");
+    out.push("");
+    out.push("| Inmueble | Valor | Valorado a | Hipoteca pendiente | Equity |");
+    out.push("| --- | ---: | :---: | ---: | ---: |");
+    for (const l of report.realEstate) {
+      out.push(
+        `| ${esc(l.name)} | ${eur(l.valueEur)} | ${l.valuationAsOf ?? "compra"} | ${eur(l.outstandingEur)} | ${eur(l.equityEur)} |`,
+      );
+    }
+    out.push("");
   }
 
   out.push("## Cuentas");

@@ -14,6 +14,7 @@ import {
   getStatementRealEstate,
 } from "../realEstate";
 import { getOverviewKpis } from "../overview";
+import { getStatementReport } from "../statement";
 
 function makeDb(): DB {
   const sqlite = new Database(":memory:");
@@ -163,5 +164,23 @@ describe("integración overview", () => {
     seedCanon(db);
     const k = await getOverviewKpis({ range: "ALL", accountIds: ["acc-x"] }, db);
     expect(k.realEstateEquityEur).toBe(0);
+  });
+});
+
+describe("integración extracto", () => {
+  it("el informe incorpora inmuebles y el total sube exactamente el equity", async () => {
+    const db = makeDb();
+    const before = await getStatementReport(db);
+    seedCanon(db);
+    const after = await getStatementReport(db);
+    // El camino vivo usa el reloj real: el equity exacto depende del día
+    // (cuotas ya amortizadas), así que se asserta coherencia, no una cifra.
+    expect(after.realEstate).toHaveLength(1);
+    expect(after.totals.realEstateEquityEur).toBeGreaterThanOrEqual(43_000);
+    expect(after.totals.netWorthEur).toBeCloseTo(
+      before.totals.netWorthEur + after.totals.realEstateEquityEur,
+      2,
+    );
+    expect(after.totals.investedMarketValueEur).toBe(before.totals.investedMarketValueEur);
   });
 });

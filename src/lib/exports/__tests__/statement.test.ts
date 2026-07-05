@@ -17,6 +17,7 @@ const sample = (): StatementReport => ({
     netWorthEur: 2200,
     positionsCount: 2,
     accountsCount: 2,
+    realEstateEquityEur: 0,
   },
   groups: [
     {
@@ -92,6 +93,7 @@ const sample = (): StatementReport => ({
       totalEur: 500,
     },
   ],
+  realEstate: [],
 });
 
 describe("buildStatementCsv", () => {

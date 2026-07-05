@@ -15,6 +15,7 @@ const sample = (asOf: string | null = null): StatementReport => ({
     netWorthEur: 2200,
     positionsCount: 2,
     accountsCount: 2,
+    realEstateEquityEur: 0,
   },
   groups: [
     {
@@ -64,6 +65,7 @@ const sample = (asOf: string | null = null): StatementReport => ({
       totalEur: 500,
     },
   ],
+  realEstate: [],
 });
 
 describe("buildStatementMd", () => {
@@ -121,5 +123,34 @@ describe("buildStatementMd", () => {
     line.valuationDate = null;
     const md = buildStatementMd(report);
     expect(md).toMatch(/MSCI \\\| World.*1000,00 € \(a coste\)/);
+  });
+
+  it("sin inmuebles no añade la fila de equity ni la sección", () => {
+    const md = buildStatementMd(sample());
+    expect(md).not.toContain("Patrimonio inmobiliario");
+    expect(md).not.toContain("### Inmuebles");
+  });
+
+  it("con inmuebles añade la fila de equity en Resumen y la sección Inmuebles", () => {
+    const report: StatementReport = {
+      ...sample(),
+      totals: { ...sample().totals, realEstateEquityEur: 43_000 },
+      realEstate: [
+        {
+          propertyId: "p1",
+          name: "Vivienda habitual",
+          valueEur: 193_000,
+          valuationAsOf: null,
+          outstandingEur: 150_000,
+          equityEur: 43_000,
+        },
+      ],
+    };
+    const md = buildStatementMd(report);
+    expect(md).toContain("| Patrimonio inmobiliario (equity) | 43.000,00 € |");
+    expect(md).toContain("### Inmuebles");
+    expect(md).toContain(
+      "| Vivienda habitual | 193.000,00 € | compra | 150.000,00 € | 43.000,00 € |",
+    );
   });
 });
