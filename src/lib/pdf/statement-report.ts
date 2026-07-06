@@ -297,7 +297,7 @@ export function buildStatementReportPdf(
       { label: "Inmueble", x: M },
       { label: "Valor", x: M + 190, align: "right" },
       { label: "Valorado a", x: M + 280 },
-      { label: "Hipoteca pendiente", x: M + 400, align: "right" },
+      { label: "Pendiente", x: M + 400, align: "right" },
       { label: "Equity", x: RIGHT, align: "right" },
     ];
     tableHead(cur, recols);

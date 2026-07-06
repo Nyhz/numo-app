@@ -174,7 +174,10 @@ export function statCards(cur: Cursor, cards: StatCard[]): void {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
       text(doc, MUTED);
-      doc.text(c.sub, x + 12, cur.y + 56);
+      // Wrap within the card so a long breakdown (efectivo · invertido ·
+      // inmuebles) flows to a second line instead of overflowing the card.
+      const subLines = doc.splitTextToSize(c.sub, w - 24);
+      doc.text(subLines, x + 12, cur.y + 56);
     }
     text(doc, INK);
   });
