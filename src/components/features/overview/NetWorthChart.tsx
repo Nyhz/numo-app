@@ -24,7 +24,6 @@ type ChartTooltipProps = {
 };
 
 type Point = {
-  label: string;
   marketIndex: number;
   totalValue: number;
   realEstateEquityEur: number;
@@ -77,7 +76,6 @@ export function NetWorthChart({
     () =>
       data.map((p) => {
         const point: Point = {
-          label: formatLabel(p.date),
           dateIso: p.date,
           // Patrimonio total mostrado en el tooltip: mercado + inmobiliario.
           // El equity es puramente aditivo aquí — no toca marketIndex.
@@ -214,8 +212,13 @@ export function NetWorthChart({
             strokeOpacity={0.55}
             strokeDasharray="4 4"
           />
+          {/* dataKey debe ser único por punto: recharts resuelve el payload del
+              tooltip de eje buscando el activeLabel en los datos, y con
+              etiquetas «dd MMM» repetidas (rangos de más de un año) devolvía el
+              primer punto de la serie en lugar del apuntado. */}
           <XAxis
-            dataKey="label"
+            dataKey="dateIso"
+            tickFormatter={formatLabel}
             stroke="hsl(var(--muted-foreground))"
             tickLine={false}
             axisLine={false}

@@ -12,7 +12,7 @@ import {
 import { formatPercent } from "@/src/lib/format";
 import type { DrawdownPoint } from "@/src/lib/risk";
 
-type ChartPoint = { label: string; dateIso: string; drawdownPct: number };
+type ChartPoint = { dateIso: string; drawdownPct: number };
 
 type TooltipEntry = { payload?: ChartPoint };
 type ChartTooltipProps = { active?: boolean; payload?: TooltipEntry[] };
@@ -31,7 +31,6 @@ function formatTooltipDate(iso: string): string {
 
 export function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
   const points: ChartPoint[] = data.map((p) => ({
-    label: formatLabel(p.date),
     dateIso: p.date,
     drawdownPct: p.drawdown * 100,
   }));
@@ -66,8 +65,11 @@ export function DrawdownChart({ data }: { data: DrawdownPoint[] }) {
           strokeOpacity={0.45}
           vertical={false}
         />
+        {/* dataKey único por punto: con etiquetas «dd MMM» repetidas el tooltip
+            de eje resolvía el primer punto coincidente, no el apuntado. */}
         <XAxis
-          dataKey="label"
+          dataKey="dateIso"
+          tickFormatter={formatLabel}
           stroke="hsl(var(--muted-foreground))"
           tickLine={false}
           axisLine={false}
