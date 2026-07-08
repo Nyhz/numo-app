@@ -1195,7 +1195,9 @@ describe("getPeriodReturns", () => {
     const r = map.get("ast_1")!;
     expect(r["1m"]).toBeCloseTo(0.1, 10);   // 121/110 − 1
     expect(r.ytd).toBeCloseTo(0.21, 10);    // 121/100 − 1
-    expect(r["3m"]).toBeNull();             // sin fila ≤ 2026-04-08
+    // La fila 2025-12-31 también es la última ≤ 2026-04-08: 3m comparte baseline
+    // con YTD (corregido durante la implementación; el borrador esperaba null).
+    expect(r["3m"]).toBeCloseTo(0.21, 10);
     expect(r["1y"]).toBeNull();
   });
 
