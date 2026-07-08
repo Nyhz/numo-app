@@ -32,7 +32,7 @@ export const PRICE_SOURCE_LABELS: Record<PriceSource, string> = {
   yahoo: "Yahoo Finance",
   coingecko: "CoinGecko",
   ft: "Financial Times (fondos, por ISIN)",
-  tradingview: "TradingView (fallback)",
+  tradingview: "TradingView (respaldo, acciones/ETFs)",
 };
 
 export const ACCOUNT_TYPES = [
