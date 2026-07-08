@@ -25,6 +25,7 @@ pnpm backfill:asset-class   # infer + persist assets.assetClassTax (fiscal class
 pnpm backfill:tax-lots      # rebuild FIFO tax lots from the ledger
 pnpm backfill:funds         # FT historical NAVs for priceSource='ft' funds
 pnpm backfill:daily-balances # rebuild the materialized daily net-worth/cash series
+pnpm backfill:tv          # resuelve símbolo TradingView + logo por activo (idempotente)
 pnpm tg:net|tg:ask|tg:bot   # Telegram: snapshot / one-shot advisor / bot daemon
 ```
 
