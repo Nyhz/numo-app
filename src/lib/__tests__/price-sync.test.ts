@@ -360,3 +360,64 @@ describe("cron sync-prices route", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("fallback TradingView", () => {
+  it("rescata un stock cuyo fetch Yahoo falla, bajo el símbolo canónico y source tradingview", async () => {
+    const db = makeDb();
+    // seed: activo stock con providerSymbol AMP.MC y tradingviewSymbol BME:AMP
+    db.insert(schema.assets).values({
+      id: "ast_amp", name: "AMPER", assetType: "stock", currency: "EUR",
+      symbol: "AMP", providerSymbol: "AMP.MC", tradingviewSymbol: "BME:AMP", isActive: true,
+    }).run();
+    const summary = await syncPrices(db, {
+      yahoo: { fetchQuote: async () => { throw new Error("429"); } },
+      coingecko: { fetchQuote: async () => { throw new Error("unused"); } },
+      ft: { fetchQuote: async () => { throw new Error("unused"); } },
+      tradingview: {
+        fetchQuote: async () => { throw new Error("unused"); },
+        fetchQuotes: async (symbols) => symbols.map((s) => ({
+          symbol: s, price: 0.21, currency: "EUR", asOf: new Date("2026-07-08T16:00:00Z"),
+        })),
+      },
+    }, "2026-07-08");
+    expect(summary.fetched).toBe(1);
+    expect(summary.errors).toHaveLength(0);
+    const row = db.select().from(schema.priceHistory).all()[0];
+    expect(row.symbol).toBe("AMP.MC");          // serie continua bajo el símbolo Yahoo
+    expect(row.source).toBe("tradingview");
+  });
+
+  it("sin cliente tradingview el fallo Yahoo queda como error (comportamiento actual)", async () => {
+    const db = makeDb();
+    db.insert(schema.assets).values({
+      id: "ast_amp", name: "AMPER", assetType: "stock", currency: "EUR",
+      symbol: "AMP", providerSymbol: "AMP.MC", tradingviewSymbol: "BME:AMP", isActive: true,
+    }).run();
+    const summary = await syncPrices(db, {
+      yahoo: { fetchQuote: async () => { throw new Error("429"); } },
+      coingecko: { fetchQuote: async () => { throw new Error("unused"); } },
+      ft: { fetchQuote: async () => { throw new Error("unused"); } },
+    }, "2026-07-08");
+    expect(summary.errors).toHaveLength(1);
+  });
+
+  it("override manual priceSource=tradingview usa el cliente TV como primario", async () => {
+    const db = makeDb();
+    db.insert(schema.assets).values({
+      id: "ast_amp", name: "AMPER", assetType: "stock", currency: "EUR",
+      symbol: "AMP", priceSource: "tradingview", tradingviewSymbol: "BME:AMP", isActive: true,
+    }).run();
+    const summary = await syncPrices(db, {
+      yahoo: { fetchQuote: async () => { throw new Error("unused"); } },
+      coingecko: { fetchQuote: async () => { throw new Error("unused"); } },
+      ft: { fetchQuote: async () => { throw new Error("unused"); } },
+      tradingview: {
+        fetchQuote: async (s) => ({ symbol: s, price: 0.21, currency: "EUR", asOf: new Date() }),
+        fetchQuotes: async () => [],
+      },
+    }, "2026-07-08");
+    expect(summary.fetched).toBe(1);
+    const row = db.select().from(schema.priceHistory).all()[0];
+    expect(row.symbol).toBe("BME:AMP");          // override ⇒ serie bajo el símbolo TV
+  });
+});

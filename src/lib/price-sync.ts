@@ -22,12 +22,11 @@ export type PriceClients = {
   yahoo: PriceClient;
   coingecko: PriceClient;
   ft: PriceClient;
+  /** Fallback dormido: solo se invoca cuando Yahoo falló para un stock/etf, o
+   *  como primario si el activo tiene priceSource='tradingview'. Opcional para
+   *  no romper llamadores que no lo inyectan. */
+  tradingview?: PriceClient & { fetchQuotes: (symbols: string[]) => Promise<Quote[]> };
 };
-
-// The daily sync doesn't call TradingView yet (that's the fallback wired in a
-// later task) — narrow the provider union here so `clients[provider]` stays
-// exhaustive against `PriceClients` without a runtime branch that never runs.
-type SyncProvider = Exclude<PricingProviderName, "tradingview">;
 
 export type SyncError = {
   assetId?: string;
@@ -48,13 +47,15 @@ export type SyncSummary = {
 
 function providerFor(
   asset: Pick<Asset, "assetType" | "priceSource">,
-): SyncProvider {
+): PricingProviderName {
   // An explicit per-asset override wins over the type-based default — this is
-  // how a money-market fund Yahoo can't price gets routed to FT.
+  // how a money-market fund Yahoo can't price gets routed to FT, or a stock
+  // whose exchange Yahoo doesn't cover gets routed to TradingView.
   if (
     asset.priceSource === "ft" ||
     asset.priceSource === "yahoo" ||
-    asset.priceSource === "coingecko"
+    asset.priceSource === "coingecko" ||
+    asset.priceSource === "tradingview"
   ) {
     return asset.priceSource;
   }
@@ -68,6 +69,7 @@ export function resolveSymbol(
     ticker: string | null;
     isin?: string | null;
     currency?: string | null;
+    tradingviewSymbol?: string | null;
   },
   provider?: PricingProviderName,
 ): string | null {
@@ -77,6 +79,7 @@ export function resolveSymbol(
     if (!isin) return null;
     return `${isin}:${(asset.currency ?? "EUR").trim().toUpperCase()}`;
   }
+  if (provider === "tradingview") return asset.tradingviewSymbol?.trim() || null;
   return (
     (asset.providerSymbol && asset.providerSymbol.trim()) ||
     (asset.symbol && asset.symbol.trim()) ||
@@ -94,7 +97,14 @@ export function resolveSymbol(
 export function priceSymbolForAsset(
   asset: Pick<
     Asset,
-    "assetType" | "priceSource" | "providerSymbol" | "symbol" | "ticker" | "isin" | "currency"
+    | "assetType"
+    | "priceSource"
+    | "providerSymbol"
+    | "symbol"
+    | "ticker"
+    | "isin"
+    | "currency"
+    | "tradingviewSymbol"
   >,
 ): string | null {
   return resolveSymbol(asset, providerFor(asset));
@@ -128,7 +138,10 @@ export async function syncPrices(
   // for ADRs, dual-listed funds, etc. For crypto assets the CoinGecko path
   // always returns EUR.
   const quoteCurrencyByAsset = new Map<string, string>();
-  const providerByAsset = new Map<string, SyncProvider>();
+  const providerByAsset = new Map<string, PricingProviderName>();
+  // Yahoo failures for stocks/ETFs with a tradingviewSymbol get queued here
+  // instead of erroring immediately — rescued in one TV batch after the loop.
+  const tvRescue: { asset: Asset; symbol: string; tvSymbol: string; message: string }[] = [];
 
   // 1. Asset prices
   for (const asset of activeAssets) {
@@ -147,6 +160,9 @@ export async function syncPrices(
       });
       continue;
     }
+    // Source-agnostic: a rescued TV row from yesterday and a healthy Yahoo
+    // row from today share the same (symbol, pricedDateUtc) unique index, so
+    // checking today's existence must not filter by provider.
     const existing = await db
       .select()
       .from(priceHistory)
@@ -154,7 +170,6 @@ export async function syncPrices(
         and(
           eq(priceHistory.symbol, symbol),
           eq(priceHistory.pricedDateUtc, today),
-          eq(priceHistory.source, provider),
         ),
       )
       .get();
@@ -167,7 +182,12 @@ export async function syncPrices(
       continue;
     }
     try {
-      const quote = await clients[provider].fetchQuote(symbol);
+      const client = clients[provider];
+      if (!client) {
+        summary.errors.push({ assetId: asset.id, symbol, message: `no client for provider ${provider}` });
+        continue;
+      }
+      const quote = await client.fetchQuote(symbol);
       quoteCurrencyByAsset.set(asset.id, quote.currency.toUpperCase());
       // Skip the insert when the quote timestamp matches an existing bar —
       // Yahoo returns Friday's `regularMarketTime` on weekends/holidays, so
@@ -201,11 +221,52 @@ export async function syncPrices(
         summary.fetched++;
       }
     } catch (err) {
-      summary.errors.push({
-        assetId: asset.id,
-        symbol,
-        message: err instanceof Error ? err.message : String(err),
-      });
+      const message = err instanceof Error ? err.message : String(err);
+      const tvSymbol = asset.tradingviewSymbol?.trim();
+      const rescuable =
+        provider === "yahoo" &&
+        (asset.assetType === "stock" || asset.assetType === "etf") &&
+        !!tvSymbol &&
+        !!clients.tradingview;
+      if (rescuable) {
+        tvRescue.push({ asset, symbol, tvSymbol: tvSymbol as string, message });
+      } else {
+        summary.errors.push({ assetId: asset.id, symbol, message });
+      }
+    }
+  }
+
+  // Fallback dormido: un único batch TV para todos los fallos Yahoo de
+  // stocks/ETFs. La fila rescatada se escribe bajo el símbolo CANÓNICO (el de
+  // Yahoo) para que la serie de price_history siga siendo una sola.
+  if (tvRescue.length > 0 && clients.tradingview) {
+    let tvQuotes: Quote[] = [];
+    try {
+      tvQuotes = await clients.tradingview.fetchQuotes(tvRescue.map((r) => r.tvSymbol));
+    } catch {
+      // TV también caído: los errores Yahoo originales se reportan abajo.
+    }
+    const byTv = new Map(tvQuotes.map((q) => [q.symbol.toUpperCase(), q]));
+    for (const r of tvRescue) {
+      const quote = byTv.get(r.tvSymbol.toUpperCase());
+      if (!quote) {
+        summary.errors.push({ assetId: r.asset.id, symbol: r.symbol, message: r.message });
+        continue;
+      }
+      quoteCurrencyByAsset.set(r.asset.id, quote.currency.toUpperCase());
+      await db
+        .insert(priceHistory)
+        .values({
+          id: ulid(),
+          symbol: r.symbol,
+          price: quote.price,
+          pricedAt: quote.asOf.getTime(),
+          pricedDateUtc: today,
+          source: "tradingview",
+          createdAt: Date.now(),
+        })
+        .run();
+      summary.fetched++;
     }
   }
 
@@ -281,6 +342,9 @@ export async function syncPrices(
     const provider = providerByAsset.get(asset.id) ?? providerFor(asset);
     const symbol = resolveSymbol(asset, provider);
     if (!symbol) continue;
+    // Source-agnostic for the same reason as the step-1 existence check — the
+    // row valued here may have been written by the TV rescue, not `provider`.
+    // `priceRow.source` still flows through to `assetValuations.priceSource`.
     const priceRow = await db
       .select()
       .from(priceHistory)
@@ -288,7 +352,6 @@ export async function syncPrices(
         and(
           eq(priceHistory.symbol, symbol),
           eq(priceHistory.pricedDateUtc, today),
-          eq(priceHistory.source, provider),
         ),
       )
       .get();

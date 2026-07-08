@@ -9,6 +9,7 @@ import {
   yahooProvider,
   coingeckoProvider,
   ftProvider,
+  tradingviewProvider,
 } from "../../../../lib/pricing";
 import { withRetry } from "../../../../lib/pricing/_net";
 import { syncPrices } from "../../../../lib/price-sync";
@@ -40,6 +41,10 @@ async function handle(req: Request): Promise<Response> {
       yahoo: { fetchQuote: (s) => withRetry(() => yahooProvider.fetchQuote(s)) },
       coingecko: { fetchQuote: (s) => withRetry(() => coingeckoProvider.fetchQuote(s)) },
       ft: { fetchQuote: (s) => withRetry(() => ftProvider.fetchQuote(s)) },
+      tradingview: {
+        fetchQuote: (s) => withRetry(() => tradingviewProvider.fetchQuote(s)),
+        fetchQuotes: (s) => withRetry(() => tradingviewProvider.fetchQuotes(s)),
+      },
     });
     // Benchmarks the Commander has activated at least once keep their price
     // history fresh alongside the asset sync; never-activated ones are free.
