@@ -441,6 +441,7 @@ finances/
 DATABASE_URL=data/finances.db            # primary; DB_PATH is a legacy alias
 DB_PATH=./data/finances.db
 CRON_SECRET=<random>
+PROTON_BACKUP_DIR=<local Proton Drive folder for DB backups>
 YAHOO_USER_AGENT=<optional override>
 COINGECKO_API_KEY=<optional, enables crypto price sync>
 NEXT_PUBLIC_APP_NAME=Numo App            # top-nav brand
