@@ -81,9 +81,10 @@ Los 3 fondos quedan sin logo a propósito → fallback de iniciales.
 circular (~20 px en tablas) con fallback a iniciales (2 letras del nombre) sobre
 fondo neutro cuando `logoUrl` es null o el `<img>` dispara `onError`. El
 navegador carga el CDN directamente (hotlink); el servidor no toca la red en
-runtime. Superficies: nueva tabla del Extracto (punto 3) + PDF del extracto,
-`/assets`, tarjetas de watchlist, tabla de transacciones y tabla «Posiciones»
-del Overview.
+runtime. Superficies (solo web): nueva tabla del Extracto (punto 3), `/assets`,
+tarjetas de watchlist, tabla de transacciones y tabla «Posiciones» del Overview.
+El PDF del extracto queda fuera: se genera con jsPDF 100 % vectorial («sin
+imágenes rasterizadas» por diseño del kit) y no admite hotlinks.
 
 ---
 
