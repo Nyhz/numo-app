@@ -90,6 +90,9 @@ export function getLatestBackupStatus(
   const fileName = all[all.length - 1];
   const full = join(dir, fileName);
   try {
+    // En un montaje CloudStorage (Proton Drive) un archivo desalojado (dataless)
+    // fuerza su materialización al abrirlo, y esta comprobación es síncrona —
+    // aceptable con la BD en ~2.5 MB; revisar con guarda `blocks === 0` si crece.
     const db = new Database(full, { readonly: true });
     try {
       const check = db.prepare("PRAGMA integrity_check").get() as { integrity_check: string };

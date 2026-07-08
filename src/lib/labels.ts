@@ -113,6 +113,7 @@ export const AUDIT_ENTITY_LABELS: Record<string, string> = {
   price_alert: "Alerta de precio",
   alert_event: "Alerta disparada",
   benchmark: "Índice de referencia",
+  backup: "Copia de seguridad",
 };
 
 export function auditEntityLabel(type: string): string {

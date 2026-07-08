@@ -10,19 +10,19 @@ import { runBackupToDrive, type BackupRunResult } from "../lib/backup";
 
 const backupSchema = z.object({}).optional();
 
-/** Copia la BD a la carpeta local de Proton Drive (retención 3). El tercer
- *  parámetro solo existe para los tests — en producción se resuelve por env. */
+/** Copia la BD a la carpeta local de Proton Drive (retención 3). Destino y
+ *  origen se resuelven siempre por env dentro de runBackupToDrive — el wire
+ *  no puede inyectar rutas (serían un primitivo de copia/borrado arbitrario). */
 export async function backupToDrive(
   input?: unknown,
   db: DB = defaultDb,
-  opts: { dir?: string; sourcePath?: string } = {},
 ): Promise<ActionResult<BackupRunResult>> {
   const parsed = backupSchema.safeParse(input ?? {});
   if (!parsed.success) {
     return { ok: false, error: { code: "validation", message: "Entrada inválida" } };
   }
   try {
-    const result = runBackupToDrive(opts);
+    const result = runBackupToDrive();
     db.insert(auditEvents)
       .values({
         id: ulid(),
@@ -38,6 +38,7 @@ export async function backupToDrive(
       })
       .run();
     revalidatePath("/settings");
+    revalidatePath("/audit");
     return { ok: true, data: result };
   } catch (err) {
     return {

@@ -15,6 +15,7 @@ const ENTITY_TYPES = [
   "price_alert",
   "alert_event",
   "benchmark",
+  "backup",
 ] as const;
 
 const ACTIONS = [

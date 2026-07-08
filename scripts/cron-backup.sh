@@ -14,6 +14,6 @@ set -a
 source .env.local
 set +a
 
-curl -fsS \
+curl -fsS --max-time 120 \
   -H "x-cron-secret: ${CRON_SECRET}" \
   http://localhost:3200/api/cron/backup
