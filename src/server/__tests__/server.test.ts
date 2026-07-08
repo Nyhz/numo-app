@@ -8,6 +8,7 @@ import type { DB } from "../../db/client";
 import { listTransactions } from "../transactions";
 import { getOverviewKpis } from "../overview";
 import { listAccounts, getAccountsSummary } from "../accounts";
+import { listAssetsWithFreshness } from "../assets";
 
 function makeDb(): DB {
   const sqlite = new Database(":memory:");
@@ -85,6 +86,39 @@ describe("getOverviewKpis — cost fallback for unpriced positions", () => {
     expect(kpis.totalNetWorthEur).toBeCloseTo(7697.3, 2);
     expect(kpis.unrealizedPnlEur).toBeCloseTo(0, 2);
     expect(kpis.unrealizedPnlPct ?? 0).toBeCloseTo(0, 6);
+  });
+});
+
+describe("listAssetsWithFreshness — FT funds keyed by ISIN:CURRENCY", () => {
+  it("finds freshness for an ft-sourced fund whose prices live under ISIN:CUR", async () => {
+    const db = makeDb();
+    db.insert(schema.assets)
+      .values({
+        id: "ast_grp",
+        name: "Groupama Trésorerie IC",
+        assetType: "fund",
+        symbol: "GP",
+        isin: "FR0000989626",
+        priceSource: "ft",
+        currency: "EUR",
+        isActive: true,
+      })
+      .run();
+    const pricedAt = Date.now() - 1000 * 60 * 60; // 1h ago → not stale
+    db.insert(schema.priceHistory)
+      .values({
+        id: "ph_grp",
+        symbol: "FR0000989626:EUR",
+        pricedAt,
+        pricedDateUtc: "2026-07-06",
+        price: 620.12,
+        source: "ft",
+      })
+      .run();
+
+    const rows = await listAssetsWithFreshness(db);
+    const grp = rows.find((r) => r.id === "ast_grp");
+    expect(grp?.freshness).toEqual({ pricedAt, source: "ft" });
   });
 });
 

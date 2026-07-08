@@ -7,6 +7,7 @@ import {
   type Asset,
   type AssetPosition,
 } from "../db/schema";
+import { priceSymbolForAsset } from "../lib/price-sync";
 
 export type PriceFreshness = {
   pricedAt: number;
@@ -32,7 +33,7 @@ export async function listAssetsWithFreshness(
   const symbols = [
     ...new Set(
       rows
-        .map((a) => a.providerSymbol ?? a.symbol ?? a.ticker)
+        .map((a) => priceSymbolForAsset(a))
         .filter((sym): sym is string => !!sym),
     ),
   ];
@@ -80,7 +81,7 @@ export async function listAssetsWithFreshness(
     if (pos?.manualPrice != null && pos.manualPriceAsOf != null) {
       freshness = { pricedAt: pos.manualPriceAsOf, source: "manual" };
     } else {
-      const symbol = asset.providerSymbol ?? asset.symbol ?? asset.ticker;
+      const symbol = priceSymbolForAsset(asset);
       const last = symbol ? latestBySymbol.get(symbol) : undefined;
       if (last) {
         const source = now - last.pricedAt > STALE_MS ? "stale" : last.source;
