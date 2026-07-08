@@ -16,6 +16,8 @@ type FormState = {
   ter: string;
   exchange: string;
   providerSymbol: string;
+  tradingviewSymbol: string;
+  logoUrl: string;
   isActive: boolean;
 };
 
@@ -28,6 +30,8 @@ function stateFromAsset(a: Asset): FormState {
     ter: a.ter != null ? String(a.ter) : "",
     exchange: a.exchange ?? "",
     providerSymbol: a.providerSymbol ?? "",
+    tradingviewSymbol: a.tradingviewSymbol ?? "",
+    logoUrl: a.logoUrl ?? "",
     isActive: a.isActive,
   };
 }
@@ -77,6 +81,8 @@ export function EditAssetModal({
       ter: parseTer(form.ter),
       exchange: form.exchange.trim() ? form.exchange.trim() : null,
       providerSymbol: form.providerSymbol.trim() ? form.providerSymbol.trim() : null,
+      tradingviewSymbol: form.tradingviewSymbol.trim() ? form.tradingviewSymbol.trim() : null,
+      logoUrl: form.logoUrl.trim() ? form.logoUrl.trim() : null,
       isActive: form.isActive,
     };
 
@@ -202,6 +208,23 @@ export function EditAssetModal({
               ? "Id de moneda de CoinGecko usado por la sincronización de precios cripto."
               : "Ticker de Yahoo Finance usado por la sincronización diaria de precios."}
           </span>
+        </Field>
+
+        <Field label="Símbolo TradingView" errors={fieldErrors.tradingviewSymbol}>
+          <input
+            value={form.tradingviewSymbol}
+            onChange={(e) => update("tradingviewSymbol", e.target.value)}
+            placeholder="BME:AMP"
+            className={inputClass}
+          />
+        </Field>
+        <Field label="URL del logo" errors={fieldErrors.logoUrl}>
+          <input
+            value={form.logoUrl}
+            onChange={(e) => update("logoUrl", e.target.value)}
+            placeholder="https://s3-symbol-logo.tradingview.com/…"
+            className={inputClass}
+          />
         </Field>
 
         <label className="flex items-center gap-2 text-sm">

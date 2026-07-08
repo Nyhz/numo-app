@@ -47,6 +47,8 @@ export async function createAsset(
           isin: data.isin ?? null,
           exchange: data.exchange ?? null,
           providerSymbol: data.providerSymbol ?? null,
+          tradingviewSymbol: data.tradingviewSymbol ?? null,
+          logoUrl: data.logoUrl ?? null,
           priceSource: data.priceSource ?? null,
           currency: data.currency,
           isActive: data.isActive,

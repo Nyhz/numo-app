@@ -65,6 +65,36 @@ describe("asset zod schemas", () => {
   });
 });
 
+describe("asset schemas: tradingview + logo", () => {
+  it("createAssetSchema acepta priceSource tradingview y los campos nuevos", () => {
+    const parsed = createAssetSchema.safeParse({
+      name: "Vanguard FTSE All-World",
+      symbol: "VWCE",
+      assetType: "etf",
+      currency: "EUR",
+      priceSource: "tradingview",
+      tradingviewSymbol: "XETR:VWCE",
+      logoUrl: "https://s3-symbol-logo.tradingview.com/vanguard.svg",
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("updateAssetSchema acepta patch de tradingviewSymbol/logoUrl/priceSource", () => {
+    const parsed = updateAssetSchema.safeParse({
+      id: "ast_1",
+      tradingviewSymbol: "BME:AMP",
+      logoUrl: null,
+      priceSource: "tradingview",
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("logoUrl inválida se rechaza", () => {
+    const parsed = updateAssetSchema.safeParse({ id: "ast_1", logoUrl: "no-es-url" });
+    expect(parsed.success).toBe(false);
+  });
+});
+
 describe("createAsset action", () => {
   let db: DB;
   beforeEach(() => {

@@ -19,6 +19,13 @@ export const assets = sqliteTable(
      *  instruments the default can't price — e.g. "ft" (Financial Times) for
      *  European mutual funds, looked up by ISIN. See price-sync. */
     priceSource: text("price_source"),
+    /** Símbolo en la simbología de TradingView (`EXCHANGE:TICKER`, p. ej.
+     *  "BME:AMP", "XETR:VWCE"), distinta de la de Yahoo. Lo rellena
+     *  `pnpm backfill:tv`; lo usa el fallback del sync cuando Yahoo falla. */
+    tradingviewSymbol: text("tradingview_symbol"),
+    /** URL absoluta del logo (CDN de TradingView o thumb de CoinGecko). El
+     *  navegador la carga directamente; null ⇒ la UI cae a iniciales. */
+    logoUrl: text("logo_url"),
     currency: text("currency").notNull().default("EUR"),
     /** Total Expense Ratio as an annual percentage (e.g. 0.22 = 0.22%/year).
      *  Manual entry per fund/ETF; null for instruments without a TER (stocks,

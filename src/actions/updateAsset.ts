@@ -43,6 +43,9 @@ export async function updateAsset(
       if (patch.ter !== undefined) next.ter = patch.ter;
       if (patch.exchange !== undefined) next.exchange = patch.exchange;
       if (patch.providerSymbol !== undefined) next.providerSymbol = patch.providerSymbol;
+      if (patch.tradingviewSymbol !== undefined) next.tradingviewSymbol = patch.tradingviewSymbol;
+      if (patch.logoUrl !== undefined) next.logoUrl = patch.logoUrl;
+      if (patch.priceSource !== undefined) next.priceSource = patch.priceSource;
       if (patch.isActive !== undefined) next.isActive = patch.isActive;
 
       // La clase fiscal se deriva de type/name/isin y decide la ventana

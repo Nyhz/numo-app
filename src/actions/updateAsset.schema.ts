@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ASSET_TYPES } from "./_shared";
+import { PRICE_SOURCES } from "../lib/domain";
 
 export const updateAssetSchema = z.object({
   id: z.string().min(1),
@@ -21,6 +22,9 @@ export const updateAssetSchema = z.object({
     .optional(),
   exchange: z.string().trim().max(32).nullable().optional(),
   providerSymbol: z.string().trim().max(64).nullable().optional(),
+  tradingviewSymbol: z.string().trim().max(64).nullable().optional(),
+  logoUrl: z.string().trim().url("URL de logo inválida").max(300).nullable().optional(),
+  priceSource: z.enum(PRICE_SOURCES).nullable().optional(),
   isActive: z.boolean().optional(),
 });
 

@@ -27,6 +27,8 @@ export const createAssetSchema = z.object({
     .optional(),
   exchange: z.string().trim().max(32).nullable().optional(),
   providerSymbol: z.string().trim().max(64).nullable().optional(),
+  tradingviewSymbol: z.string().trim().max(64).nullable().optional(),
+  logoUrl: z.string().trim().url("URL de logo inválida").max(300).nullable().optional(),
   // null = pick provider by type (crypto → CoinGecko, else Yahoo). Set
   // "ft" for funds priced by ISIN that Yahoo can't quote.
   priceSource: z.enum(PRICE_SOURCES).nullable().optional(),
