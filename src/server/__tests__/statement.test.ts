@@ -25,9 +25,16 @@ function seedAccount(db: DB, name: string, accountType: string, cashEur = 0): st
   return id;
 }
 
-function seedAsset(db: DB, name: string, assetType: string): string {
+function seedAsset(
+  db: DB,
+  name: string,
+  assetType: string,
+  opts: { logoUrl?: string | null } = {},
+): string {
   const id = ulid();
-  db.insert(schema.assets).values({ id, name, assetType }).run();
+  db.insert(schema.assets)
+    .values({ id, name, assetType, logoUrl: opts.logoUrl ?? null })
+    .run();
   return id;
 }
 
@@ -165,7 +172,7 @@ describe("getStatementReport", () => {
     const cryptoAcc = seedAccount(db, "Binance", "crypto");
     seedAccount(db, "MyInvestor", "savings", 500);
 
-    const etf = seedAsset(db, "MSCI World", "etf");
+    const etf = seedAsset(db, "MSCI World", "etf", { logoUrl: "https://cdn/x.svg" });
     seedPosition(db, etf, 10, 1000);
     seedValuation(db, etf, 10, 120); // market 1200
     seedBuy(db, broker, etf, 1000);
@@ -190,6 +197,7 @@ describe("getStatementReport", () => {
     expect(etfGroup.marketValueEur).toBeCloseTo(1200);
     expect(etfGroup.pnlEur).toBeCloseTo(200);
     expect(etfGroup.weight).toBeCloseTo(1200 / 1700);
+    expect(report.groups[0].lines[0].logoUrl).toBe("https://cdn/x.svg");
     expect(cryptoGroup.marketValueEur).toBeCloseTo(500);
     expect(cryptoGroup.pnlEur).toBeCloseTo(-100);
 

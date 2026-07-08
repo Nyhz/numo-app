@@ -31,6 +31,7 @@ const sample = (asOf: string | null = null): StatementReport => ({
           assetType: "etf",
           symbol: "IWDA",
           isin: "IE00B4L5Y983",
+          logoUrl: null,
           currency: "EUR",
           quantity: 10,
           unitPriceEur: 120,

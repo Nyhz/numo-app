@@ -24,6 +24,7 @@ export type StatementAssetLine = {
   assetType: string;
   symbol: string | null;
   isin: string | null;
+  logoUrl: string | null;
   currency: string;
   quantity: number;
   unitPriceEur: number | null;
@@ -106,6 +107,7 @@ function toLine(input: LineInput, totalMarketValueEur: number): StatementAssetLi
     assetType: input.asset.assetType,
     symbol: input.asset.ticker ?? input.asset.symbol,
     isin: input.asset.isin,
+    logoUrl: input.asset.logoUrl,
     currency: input.asset.currency,
     quantity: input.quantity,
     unitPriceEur: input.unitPriceEur,

@@ -9,6 +9,7 @@ import { DataTable } from "@/src/components/ui/DataTable";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { ChartCardSkeleton } from "@/src/components/features/overview/skeletons";
 import { AllocationDonut } from "@/src/components/features/statement/AllocationDonut";
+import { AssetBreakdownTable } from "@/src/components/features/statement/AssetBreakdownTable";
 import { CostsCard } from "@/src/components/features/statement/CostsCard";
 import { DrawdownChart } from "@/src/components/features/statement/DrawdownChart";
 import { SectorAllocation } from "@/src/components/features/statement/SectorAllocation";
@@ -34,6 +35,7 @@ import { getSectorAllocation } from "@/src/server/sectors";
 import { getCountryAllocation } from "@/src/server/countries";
 import { getObjectivesAllocation } from "@/src/server/objectives";
 import { getCostsSummary } from "@/src/server/costs";
+import { getPeriodReturns } from "@/src/server/returns";
 import { resolveObjectiveColor } from "@/src/lib/objective-colors";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -255,6 +257,10 @@ export default async function StatementPage({
       getCostsSummary(),
     ]);
   const hasPositions = report.totals.positionsCount > 0;
+  const returnsMap = await getPeriodReturns(
+    report.groups.flatMap((g) => g.lines.map((l) => l.assetId)),
+  );
+  const returnsByAsset = Object.fromEntries(returnsMap);
 
   // Portfolio split by allocation objective (live: reflects new objectives,
   // reassigned assets, and target edits on the next render). The unassigned
@@ -417,6 +423,17 @@ export default async function StatementPage({
           <AccountsTable accounts={report.accounts} />
         )}
       </Card>
+
+      {hasPositions && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-medium">Desglose por activo</h2>
+          <AssetBreakdownTable
+            groups={report.groups}
+            returnsByAsset={returnsByAsset}
+            pricesAsOf={report.pricesAsOf}
+          />
+        </section>
+      )}
     </div>
   );
 }
