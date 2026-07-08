@@ -3,6 +3,7 @@ import * as yahoo from "./yahoo";
 import * as coingecko from "./coingecko";
 import * as ft from "./ft";
 import * as justetf from "./justetf";
+import * as tradingview from "./tradingview";
 import type { HistoricalBar, Quote } from "./types";
 
 export type {
@@ -13,7 +14,7 @@ export type {
   SectorWeight,
 } from "./types";
 
-export type PricingProviderName = "yahoo" | "coingecko" | "ft";
+export type PricingProviderName = "yahoo" | "coingecko" | "ft" | "tradingview";
 
 export type PricingProvider = {
   name: PricingProviderName;
@@ -45,6 +46,13 @@ export const ftProvider: PricingProvider = {
   fetchHistory: ft.fetchHistory,
 };
 
+export const tradingviewProvider: PricingProvider = {
+  name: "tradingview",
+  fetchQuote: tradingview.fetchQuote,
+  fetchQuotes: tradingview.fetchQuotes,
+  fetchHistory: tradingview.fetchHistory,
+};
+
 export function providerForAsset(
   asset: Pick<Asset, "assetType" | "priceSource">,
 ): PricingProvider {
@@ -52,6 +60,7 @@ export function providerForAsset(
   if (asset.priceSource === "ft") return ftProvider;
   if (asset.priceSource === "coingecko") return coingeckoProvider;
   if (asset.priceSource === "yahoo") return yahooProvider;
+  if (asset.priceSource === "tradingview") return tradingviewProvider;
   if (asset.assetType === "crypto") return coingeckoProvider;
   return yahooProvider;
 }

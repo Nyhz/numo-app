@@ -24,6 +24,11 @@ export type PriceClients = {
   ft: PriceClient;
 };
 
+// The daily sync doesn't call TradingView yet (that's the fallback wired in a
+// later task) — narrow the provider union here so `clients[provider]` stays
+// exhaustive against `PriceClients` without a runtime branch that never runs.
+type SyncProvider = Exclude<PricingProviderName, "tradingview">;
+
 export type SyncError = {
   assetId?: string;
   symbol?: string;
@@ -43,7 +48,7 @@ export type SyncSummary = {
 
 function providerFor(
   asset: Pick<Asset, "assetType" | "priceSource">,
-): PricingProviderName {
+): SyncProvider {
   // An explicit per-asset override wins over the type-based default — this is
   // how a money-market fund Yahoo can't price gets routed to FT.
   if (
@@ -123,7 +128,7 @@ export async function syncPrices(
   // for ADRs, dual-listed funds, etc. For crypto assets the CoinGecko path
   // always returns EUR.
   const quoteCurrencyByAsset = new Map<string, string>();
-  const providerByAsset = new Map<string, PricingProviderName>();
+  const providerByAsset = new Map<string, SyncProvider>();
 
   // 1. Asset prices
   for (const asset of activeAssets) {
