@@ -91,11 +91,15 @@ imágenes rasterizadas» por diseño del kit) y no admite hotlinks.
 ## 3 · Desglose por activo en Extracto web con rentabilidades por ventana
 
 **Capa de lectura** `src/server/returns.ts`:
-- `getPeriodReturns(symbols, db)` → por símbolo: último cierre de
-  `price_history` vs cierre ≤ `hoy − ventana`, **ambos convertidos a EUR** con
-  la `fx_rates` de la fecha de cada extremo (vía `src/lib/fx.ts`). Coherente con
-  la filosofía EUR-first: para UNH mide lo que hizo el patrimonio, no el ticker
-  en USD.
+- `getPeriodReturns(assetIds, db)` → por activo: último `unitPriceEur` de
+  `asset_valuations` vs el de la fila ≤ `hoy − ventana`. La serie ya está en
+  EUR por construcción (el sync convierte con FX al escribirla), así que no
+  hay conversión en lectura. (Enmienda sobre el borrador inicial: `price_history`
+  guarda el precio nativo sin columna de divisa, lo que hacía ambigua la
+  conversión; `asset_valuations` es la serie EUR canónica.) Coherente con la
+  filosofía EUR-first: para UNH mide lo que hizo el patrimonio, no el ticker
+  en USD. Limitación asumida: la serie existe desde que se posee el activo,
+  así que las ventanas anteriores a la compra salen «—».
 - Ventanas: `1m / 3m / 6m / YTD / 1y`. `null` cuando no hay profundidad de
   histórico → la UI pinta «—». Sin 3a/5a (no hay datos).
 - Rentabilidad de **precio** (los flujos intermedios no entran; para
