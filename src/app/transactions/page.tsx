@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { DataTable } from "@/src/components/ui/DataTable";
+import { AssetLogo } from "@/src/components/ui/AssetLogo";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { StatesBlock } from "@/src/components/ui/StatesBlock";
 import { listTransactions } from "@/src/server/transactions";
@@ -30,7 +31,7 @@ export default async function TransactionsPage({
     listAssets(),
   ]);
   const accountName = new Map(accounts.map((a) => [a.id, a.name]));
-  const assetName = new Map(assets.map((a) => [a.id, a.symbol ?? a.name]));
+  const assetById = new Map(assets.map((a) => [a.id, a]));
 
   const nextHref = result.nextCursor
     ? `/transactions?cursor=${encodeURIComponent(result.nextCursor)}`
@@ -98,7 +99,16 @@ export default async function TransactionsPage({
             {
               key: "asset",
               header: "Activo",
-              cell: (r) => assetName.get(r.assetId) ?? r.assetId,
+              cell: (r) => {
+                const a = assetById.get(r.assetId);
+                if (!a) return r.assetId;
+                return (
+                  <span className="flex items-center gap-2">
+                    <AssetLogo name={a.name} logoUrl={a.logoUrl} size={18} />
+                    {a.symbol ?? a.name}
+                  </span>
+                );
+              },
             },
             {
               key: "type",

@@ -7,6 +7,7 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { ConfirmModal } from "@/src/components/ui/ConfirmModal";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
+import { AssetLogo } from "@/src/components/ui/AssetLogo";
 import { AssetTypeBadge } from "@/src/components/ui/AssetTypeBadge";
 import { PositionSparkline } from "@/src/components/features/overview/PositionSparkline";
 import { cn } from "@/src/lib/cn";
@@ -98,6 +99,7 @@ export function WatchlistCard({ item }: { item: WatchlistItem }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
+              <AssetLogo name={asset.name} logoUrl={asset.logoUrl} size={20} />
               <span className="truncate font-semibold">{asset.name}</span>
               <AssetTypeBadge type={asset.assetType} />
             </div>

@@ -1,3 +1,4 @@
+import { AssetLogo } from "@/src/components/ui/AssetLogo";
 import { AssetTypeStripe } from "@/src/components/ui/AssetTypeBadge";
 import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
@@ -41,6 +42,9 @@ export function TopPositionsTable({ rows }: { rows: TopPositionRow[] }) {
               return (
                 <div className="flex items-stretch gap-3">
                   <AssetTypeStripe type={a.assetType} />
+                  <div className="flex items-center">
+                    <AssetLogo name={a.name} logoUrl={a.logoUrl} size={24} />
+                  </div>
                   <div className="flex flex-col leading-tight">
                     <span className="font-medium">{a.name}</span>
                     <span className="flex items-center gap-1.5">

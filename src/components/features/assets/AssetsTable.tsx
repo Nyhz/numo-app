@@ -7,6 +7,7 @@ import { Badge } from "@/src/components/ui/Badge";
 import { Button } from "@/src/components/ui/Button";
 import { ConfirmModal } from "@/src/components/ui/ConfirmModal";
 import { DataTable } from "@/src/components/ui/DataTable";
+import { AssetLogo } from "@/src/components/ui/AssetLogo";
 import { assetTypeLabel } from "@/src/components/ui/AssetTypeBadge";
 import { deactivateAsset } from "@/src/actions/deactivateAsset";
 import { deleteAsset } from "@/src/actions/deleteAsset";
@@ -88,7 +89,16 @@ export function AssetsTable({ rows }: { rows: AssetListRow[] }) {
             cell: (r) => <WatchlistStar assetId={r.id} watchlisted={r.isWatchlisted} />,
           },
           { key: "symbol", header: "Símbolo", cell: (r) => r.symbol ?? "—" },
-          { key: "name", header: "Nombre", cell: (r) => r.name },
+          {
+            key: "name",
+            header: "Nombre",
+            cell: (r) => (
+              <span className="flex items-center gap-2">
+                <AssetLogo name={r.name} logoUrl={r.logoUrl} size={20} />
+                {r.name}
+              </span>
+            ),
+          },
           {
             key: "type",
             header: "Tipo",
