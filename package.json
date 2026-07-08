@@ -21,6 +21,7 @@
     "backfill:tax-lots": "tsx scripts/backfill-tax-lots.ts",
     "backfill:funds": "tsx scripts/backfill-fund-prices.ts",
     "backfill:daily-balances": "tsx scripts/backfill-daily-balances.ts",
+    "backfill:tv": "tsx scripts/backfill-tradingview.ts",
     "tg:net": "tsx scripts/tg-net.ts",
     "tg:ask": "NODE_OPTIONS='--conditions=react-server' tsx scripts/tg-ask.ts",
     "tg:bot": "NODE_OPTIONS='--conditions=react-server' tsx scripts/tg-bot.ts"
