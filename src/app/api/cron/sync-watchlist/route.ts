@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { db } from "../../../../db/client";
-import { yahooProvider, coingeckoProvider } from "../../../../lib/pricing";
+import { yahooProvider, coingeckoProvider, tradingviewProvider } from "../../../../lib/pricing";
 import { withRetry } from "../../../../lib/pricing/_net";
 import { sendTelegram } from "../../../../lib/advisor/telegram";
 import { syncWatchlistQuotes } from "../../../../lib/watchlist-sync";
@@ -29,6 +29,7 @@ async function handle(req: Request): Promise<Response> {
     const summary = await syncWatchlistQuotes(db, {
       yahoo: { fetchQuotes: (s) => withRetry(() => yahooProvider.fetchQuotes(s)) },
       coingecko: { fetchQuotes: (s) => withRetry(() => coingeckoProvider.fetchQuotes(s)) },
+      tradingview: { fetchQuotes: (s) => withRetry(() => tradingviewProvider.fetchQuotes(s)) },
       sendTelegram,
     });
     // A fresh quote or a newly fired alert must surface without a manual reload.

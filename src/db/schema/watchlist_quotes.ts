@@ -24,7 +24,7 @@ export const watchlistQuotes = sqliteTable(
     prevPrice: real("prev_price"),
     currency: text("currency").notNull(),
     asOf: integer("as_of", { mode: "number" }).notNull(),
-    source: text("source").notNull(), // "yahoo" | "coingecko"
+    source: text("source").notNull(), // "yahoo" | "coingecko" | "tradingview"
     updatedAt: updatedAtCol(),
   },
   (t) => ({

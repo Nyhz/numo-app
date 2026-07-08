@@ -29,6 +29,7 @@ function FreshnessCell({ row }: { row: AssetListRow }) {
     "yahoo-backfill": { label: "Yahoo", variant: "success" },
     coingecko: { label: "CoinGecko", variant: "success" },
     ft: { label: "Financial Times", variant: "success" },
+    tradingview: { label: "TradingView", variant: "success" },
     rebuilt: { label: "Reconstruido", variant: "neutral" },
     manual: { label: "Manual", variant: "neutral" },
   };

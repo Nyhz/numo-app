@@ -20,7 +20,14 @@ function makeDb(): DB {
 
 function seedAsset(
   db: DB,
-  opts: { name: string; assetType: string; symbol: string; watchlisted?: boolean; active?: boolean },
+  opts: {
+    name: string;
+    assetType: string;
+    symbol: string;
+    watchlisted?: boolean;
+    active?: boolean;
+    tradingviewSymbol?: string;
+  },
 ): string {
   const id = ulid();
   db.insert(schema.assets)
@@ -30,6 +37,7 @@ function seedAsset(
       assetType: opts.assetType,
       symbol: opts.symbol,
       providerSymbol: opts.symbol,
+      tradingviewSymbol: opts.tradingviewSymbol,
       isWatchlisted: opts.watchlisted ?? true,
       isActive: opts.active ?? true,
     })
@@ -188,5 +196,30 @@ describe("syncWatchlistQuotes", () => {
     );
     expect(summary.assets).toBe(0);
     expect(summary.quoted).toBe(0);
+  });
+
+  it("rescata por TradingView los watchlisted que Yahoo no devolvió", async () => {
+    const id = seedAsset(db, {
+      name: "UnitedHealth",
+      assetType: "stock",
+      symbol: "UNH",
+      tradingviewSymbol: "NYSE:UNH",
+    });
+    const summary = await syncWatchlistQuotes(
+      db,
+      {
+        yahoo: { fetchQuotes: async () => [] }, // Yahoo no devuelve nada
+        coingecko: { fetchQuotes: async () => [] },
+        tradingview: {
+          fetchQuotes: async (symbols) =>
+            symbols.map((s) => ({ symbol: s, price: 425.25, currency: "USD", asOf: new Date() })),
+        },
+      },
+      NOW,
+    );
+    expect(summary.quoted).toBe(1);
+    const q = db.select().from(schema.watchlistQuotes).where(eq(schema.watchlistQuotes.assetId, id)).get();
+    expect(q?.source).toBe("tradingview");
+    expect(q?.price).toBe(425.25);
   });
 });

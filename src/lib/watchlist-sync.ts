@@ -24,6 +24,8 @@ export type WatchlistClients = {
   // which keeps soft-ban risk near zero. Injected so tests can stub them.
   yahoo: { fetchQuotes: (symbols: string[]) => Promise<Quote[]> };
   coingecko: { fetchQuotes: (symbols: string[]) => Promise<Quote[]> };
+  /** Fallback dormido para stocks/ETFs que el batch Yahoo no devolvió. */
+  tradingview?: { fetchQuotes: (symbols: string[]) => Promise<Quote[]> };
   // Best-effort Telegram sender (the shared `sendTelegram`). Optional so the
   // sync can run without it; alerts still raise the in-app banner.
   sendTelegram?: (text: string) => Promise<{ ok: boolean; error?: string }>;
@@ -151,6 +153,33 @@ export async function syncWatchlistQuotes(
   for (const q of yahooQuotes) quoteBySymbol.set(q.symbol.toUpperCase(), { quote: q, source: "yahoo" });
   for (const q of coingeckoQuotes)
     quoteBySymbol.set(q.symbol.toUpperCase(), { quote: q, source: "coingecko" });
+
+  // Fallback dormido: los no-cripto que Yahoo no devolvió y tienen símbolo TV
+  // se piden en UN batch al scanner y se reinyectan bajo su símbolo Yahoo, así
+  // el bucle de upsert no cambia.
+  const tvMisses = watched.filter((a) => {
+    if (a.assetType === "crypto" || !a.tradingviewSymbol?.trim()) return false;
+    const symbol = symbolByAsset.get(a.id);
+    return !!symbol && !quoteBySymbol.has(symbol.toUpperCase());
+  });
+  if (tvMisses.length > 0 && clients.tradingview) {
+    let tvQuotes: Quote[] = [];
+    try {
+      tvQuotes = await clients.tradingview.fetchQuotes(
+        tvMisses.map((a) => a.tradingviewSymbol!.trim()),
+      );
+    } catch {
+      // TV caído: la watchlist simplemente no refresca esos activos este tick.
+    }
+    const byTv = new Map(tvQuotes.map((q) => [q.symbol.toUpperCase(), q]));
+    for (const a of tvMisses) {
+      const quote = byTv.get(a.tradingviewSymbol!.trim().toUpperCase());
+      const symbol = symbolByAsset.get(a.id);
+      if (quote && symbol) {
+        quoteBySymbol.set(symbol.toUpperCase(), { quote, source: "tradingview" });
+      }
+    }
+  }
 
   const assetIds = watched.map((a) => a.id);
   const alerts = db
