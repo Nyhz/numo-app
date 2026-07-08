@@ -16,6 +16,9 @@ export type DataTableProps<T> = {
   emptyState?: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
+  /** Clases extra para el <table> interno — p. ej. `table-fixed` cuando varias
+   *  tablas apiladas deben compartir la misma geometría de columnas. */
+  tableClassName?: string;
 };
 
 const alignClass = {
@@ -31,6 +34,7 @@ export function DataTable<T>({
   emptyState,
   footer,
   className,
+  tableClassName,
 }: DataTableProps<T>) {
   return (
     <div
@@ -40,7 +44,7 @@ export function DataTable<T>({
       )}
     >
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
+        <table className={cn("w-full border-collapse text-sm", tableClassName)}>
           <thead>
             <tr className="border-b border-border bg-muted/40">
               {columns.map((col) => (

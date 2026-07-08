@@ -44,17 +44,21 @@ export function AssetBreakdownTable({
           <DataTable<StatementAssetLine>
             rows={group.lines}
             getRowKey={(l) => l.assetId}
+            // table-fixed + anchos por columna: las cuatro tablas apiladas
+            // comparten geometría — sin él, cada grupo reparte el ancho según
+            // sus nombres y las columnas quedan desalineadas entre tipos.
+            tableClassName="table-fixed"
             columns={[
               {
                 key: "asset",
                 header: "Activo",
                 cell: (l) => (
-                  <span className="flex items-center gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
                     <AssetLogo name={l.name} logoUrl={l.logoUrl} size={20} />
-                    <span className="flex flex-col leading-tight">
-                      <span className="font-medium">{l.name}</span>
+                    <span className="flex min-w-0 flex-col leading-tight">
+                      <span className="truncate font-medium">{l.name}</span>
                       {l.symbol && (
-                        <span className="text-xs text-muted-foreground tabular-nums">
+                        <span className="truncate text-xs text-muted-foreground tabular-nums">
                           {l.symbol}
                         </span>
                       )}
@@ -72,6 +76,7 @@ export function AssetBreakdownTable({
                 key: "quantity",
                 header: "Cant.",
                 align: "right",
+                className: "w-[7%]",
                 cell: (l) => (
                   <span className="tabular-nums text-xs">
                     {formatQuantity(l.quantity, { maximumFractionDigits: 8 })}
@@ -82,6 +87,7 @@ export function AssetBreakdownTable({
                 key: "price",
                 header: "Precio",
                 align: "right",
+                className: "w-[8%]",
                 cell: (l) =>
                   l.unitPriceEur != null ? (
                     <SensitiveValue className="tabular-nums text-xs">
@@ -95,6 +101,7 @@ export function AssetBreakdownTable({
                 key: "value",
                 header: "Valor",
                 align: "right",
+                className: "w-[10%]",
                 cell: (l) => (
                   <SensitiveValue className="tabular-nums">
                     {formatEur(l.marketValueEur ?? l.costEur)}
@@ -105,6 +112,7 @@ export function AssetBreakdownTable({
                 key: "pnl",
                 header: "Plusvalía",
                 align: "right",
+                className: "w-[10%]",
                 cell: (l) => {
                   if (l.valuedAtCost || l.pnlEur == null) {
                     return <span className="text-muted-foreground">—</span>;
@@ -130,6 +138,7 @@ export function AssetBreakdownTable({
                 key: "weight",
                 header: "Peso",
                 align: "right",
+                className: "w-[7%]",
                 cell: (l) =>
                   l.weight != null ? (
                     <span className="tabular-nums text-xs">{formatPercent(l.weight)}</span>
@@ -141,6 +150,7 @@ export function AssetBreakdownTable({
                 key: `ret_${period}`,
                 header: PERIOD_LABEL[period],
                 align: "right" as const,
+                className: "w-[6.5%]",
                 cell: (l: StatementAssetLine) => (
                   <ReturnCell value={returnsByAsset[l.assetId]?.[period] ?? null} />
                 ),
