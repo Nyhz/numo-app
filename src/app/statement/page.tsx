@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { Suspense } from "react";
 import Link from "next/link";
+import { Badge } from "@/src/components/ui/Badge";
 import { Card } from "@/src/components/ui/Card";
 import { Skeleton } from "@/src/components/ui/Skeleton";
 import { StatesBlock } from "@/src/components/ui/StatesBlock";
@@ -46,6 +47,13 @@ function parseRange(value: string | string[] | undefined): OverviewRange {
     return raw as OverviewRange;
   }
   return "ALL";
+}
+
+// Plain helper (not a component) so the impure Date.now() read stays out of
+// render — react-hooks/purity flags it otherwise. Same pattern as
+// AdvisorStatusBar's relTime().
+function pricesFreshnessVariant(pricesAsOfAt: number): "success" | "warning" {
+  return Date.now() - pricesAsOfAt > 36 * 60 * 60 * 1000 ? "warning" : "success";
 }
 
 function RangeTabs({ range }: { range: OverviewRange }) {
@@ -292,12 +300,18 @@ export default async function StatementPage({
           <h1 className="text-2xl font-semibold tracking-tight">Extracto</h1>
           <p className="text-sm text-muted-foreground">
             Extracto completo de la cartera — generado el{" "}
-            {formatDateTime(report.generatedAt)}
-            {report.pricesAsOf ? ` · precios a cierre del ${report.pricesAsOf}` : ""} —
-            todas las cuentas y activos, valorados en EUR.
+            {formatDateTime(report.generatedAt)} — todas las cuentas y activos,
+            valorados en EUR.
           </p>
         </div>
-        <StatementExportMenu />
+        <div className="flex items-center gap-3">
+          {report.pricesAsOfAt != null && (
+            <Badge variant={pricesFreshnessVariant(report.pricesAsOfAt)}>
+              Precios a {formatDateTime(report.pricesAsOfAt)}
+            </Badge>
+          )}
+          <StatementExportMenu />
+        </div>
       </header>
 
       <KpiRow report={report} />

@@ -29,13 +29,31 @@ function seedAsset(
   db: DB,
   name: string,
   assetType: string,
-  opts: { logoUrl?: string | null } = {},
+  opts: { logoUrl?: string | null; symbol?: string | null } = {},
 ): string {
   const id = ulid();
   db.insert(schema.assets)
-    .values({ id, name, assetType, logoUrl: opts.logoUrl ?? null })
+    .values({
+      id,
+      name,
+      assetType,
+      logoUrl: opts.logoUrl ?? null,
+      symbol: opts.symbol ?? null,
+    })
     .run();
   return id;
+}
+
+function seedPriceHistory(
+  db: DB,
+  symbol: string,
+  pricedAt: number,
+  pricedDateUtc: string,
+  price = 1,
+): void {
+  db.insert(schema.priceHistory)
+    .values({ id: ulid(), symbol, pricedAt, pricedDateUtc, price, source: "yahoo" })
+    .run();
 }
 
 function seedPosition(db: DB, assetId: string, quantity: number, totalCostEur: number): void {
@@ -262,6 +280,30 @@ describe("getStatementReport", () => {
     expect(report.totals.unrealizedPnlEur).toBeCloseTo(0);
     expect(report.totals.unrealizedPnlPct).toBeCloseTo(0);
     expect(report.totals.investedCostEur).toBeCloseTo(750);
+  });
+
+  it("pricesAsOfAt refleja el pricedAt más reciente de los símbolos en cartera", async () => {
+    const broker = seedAccount(db, "Degiro", "broker");
+    const etf = seedAsset(db, "MSCI World", "etf", { symbol: "SYM1" });
+    seedPosition(db, etf, 10, 1000);
+    seedValuation(db, etf, 10, 120);
+    seedBuy(db, broker, etf, 1000);
+    seedPriceHistory(db, "SYM1", 1751980800000, "2025-07-08", 120);
+
+    const report = await getStatementReport(db);
+    expect(report.pricesAsOfAt).toBe(1751980800000);
+  });
+
+  it("extracto as-of no lleva pricesAsOfAt", async () => {
+    const broker = seedAccount(db, "Degiro", "broker");
+    const etf = seedAsset(db, "MSCI World", "etf", { symbol: "SYM1" });
+    seedPosition(db, etf, 10, 1000);
+    seedValuation(db, etf, 10, 120, "2026-06-08");
+    seedBuy(db, broker, etf, 1000);
+    seedPriceHistory(db, "SYM1", 1751980800000, "2025-07-08", 120);
+
+    const report = await getStatementReport(db, { asOf: "2026-07-01" });
+    expect(report.pricesAsOfAt).toBeNull();
   });
 
   it("una posición sin precio se valora a coste igual que el Resumen (sin divergencia)", async () => {

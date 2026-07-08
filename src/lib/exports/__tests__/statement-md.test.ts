@@ -6,6 +6,7 @@ const sample = (asOf: string | null = null): StatementReport => ({
   generatedAt: Date.UTC(2026, 5, 9, 10, 30),
   asOf,
   pricesAsOf: "2026-06-08",
+  pricesAsOfAt: null,
   totals: {
     investedMarketValueEur: 1700,
     investedCostEur: 1600,

@@ -6,11 +6,13 @@ import {
   assets,
   assetTransactions,
   assetValuations,
+  priceHistory,
   type Asset,
   type AssetValuation,
 } from "../db/schema";
 import { isCashBearingAccount } from "../lib/domain";
 import { round, roundEur } from "../lib/money";
+import { priceSymbolForAsset } from "../lib/price-sync";
 import { foldLedger } from "./recompute";
 import { listAccounts } from "./accounts";
 import { listPositions } from "./positions";
@@ -79,6 +81,8 @@ export type StatementReport = {
   /** Fecha ISO del cierre más reciente entre las posiciones valoradas; los
    *  precios del extracto corresponden a esta fecha, no a generatedAt. */
   pricesAsOf: string | null;
+  /** Epoch ms del precio más reciente en cartera (badge de frescura). Null en as-of. */
+  pricesAsOfAt: number | null;
   totals: StatementTotals;
   groups: StatementGroup[];
   accounts: StatementAccountLine[];
@@ -209,6 +213,7 @@ function assembleReport(input: AssemblyInput): StatementReport {
     generatedAt: Date.now(),
     asOf: input.asOf,
     pricesAsOf,
+    pricesAsOfAt: null,
     totals: {
       investedMarketValueEur,
       investedCostEur,
@@ -224,6 +229,24 @@ function assembleReport(input: AssemblyInput): StatementReport {
     accounts,
     realEstate: input.realEstate.lines,
   };
+}
+
+/** Epoch ms del `pricedAt` más reciente en `price_history` entre los símbolos
+ *  de los activos en cartera — la fuente del badge de frescura del header,
+ *  distinta de `pricesAsOf` (fecha de la valoración persistida). */
+async function latestPricedAt(assetRows: Asset[], db: DB): Promise<number | null> {
+  const symbols = [
+    ...new Set(
+      assetRows.map((a) => priceSymbolForAsset(a)).filter((s): s is string => !!s),
+    ),
+  ];
+  if (symbols.length === 0) return null;
+  const row = await db
+    .select({ latest: max(priceHistory.pricedAt) })
+    .from(priceHistory)
+    .where(inArray(priceHistory.symbol, symbols))
+    .get();
+  return row?.latest ?? null;
 }
 
 export async function getStatementReport(
@@ -259,19 +282,24 @@ export async function getStatementReport(
     );
   }
 
-  return assembleReport({
-    asOf: null,
-    lines: lineInputs,
-    accounts: accountsList.map((a) => ({
-      accountId: a.id,
-      name: a.name,
-      accountType: a.accountType,
-      currency: a.currency,
-      cashEur: a.totalBalanceEur,
-    })),
-    investedByAccount,
-    realEstate,
-  });
+  const pricesAsOfAt = await latestPricedAt(open.map((r) => r.asset), db);
+
+  return {
+    ...assembleReport({
+      asOf: null,
+      lines: lineInputs,
+      accounts: accountsList.map((a) => ({
+        accountId: a.id,
+        name: a.name,
+        accountType: a.accountType,
+        currency: a.currency,
+        cashEur: a.totalBalanceEur,
+      })),
+      investedByAccount,
+      realEstate,
+    }),
+    pricesAsOfAt,
+  };
 }
 
 /** Última valoración ≤ asOf por activo, mismo patrón de dos queries que
