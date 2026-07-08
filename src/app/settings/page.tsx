@@ -1,8 +1,10 @@
 import { resolve } from "node:path";
 import { Card } from "@/src/components/ui/Card";
 import { WipeAppCard } from "@/src/components/features/settings/WipeAppCard";
+import { BackupCard } from "@/src/components/features/settings/BackupCard";
 import { ProfileEditor } from "@/src/components/features/advisor/ProfileEditor";
 import { readProfile } from "@/src/lib/advisor/memory";
+import { getLatestBackupStatus } from "@/src/lib/backup";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +45,11 @@ export default function SettingsPage() {
       </Card>
 
       <ProfileEditor initialContent={readProfile()} defaultOpen />
+
+      <BackupCard
+        status={getLatestBackupStatus()}
+        destDir={process.env.PROTON_BACKUP_DIR?.trim() || null}
+      />
 
       <WipeAppCard />
     </div>
