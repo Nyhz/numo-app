@@ -420,4 +420,75 @@ describe("fallback TradingView", () => {
     const row = db.select().from(schema.priceHistory).all()[0];
     expect(row.symbol).toBe("BME:AMP");          // override ⇒ serie bajo el símbolo TV
   });
+
+  it("una fila rescatada por TV valora la posición (paso 3 agnóstico de source) con FX aplicado", async () => {
+    const db = makeDb();
+    db.insert(schema.assets).values({
+      id: "ast_us", name: "US Stock", assetType: "stock", currency: "USD",
+      symbol: "USX", providerSymbol: "USX", tradingviewSymbol: "NYSE:USX", isActive: true,
+    }).run();
+    db.insert(schema.assetPositions).values({
+      id: "pos_us", assetId: "ast_us", quantity: 5, averageCost: 7,
+    }).run();
+    const summary = await syncPrices(db, {
+      // Yahoo falla para el stock pero sigue sirviendo el par FX del paso 2.
+      yahoo: {
+        fetchQuote: async (s) => {
+          if (s === "EURUSD=X") {
+            return { symbol: s, price: 1.25, currency: "USD", asOf: new Date("2026-07-08T16:00:00Z") };
+          }
+          throw new Error("429");
+        },
+      },
+      coingecko: { fetchQuote: async () => { throw new Error("unused"); } },
+      ft: { fetchQuote: async () => { throw new Error("unused"); } },
+      tradingview: {
+        fetchQuote: async () => { throw new Error("unused"); },
+        fetchQuotes: async (symbols) => symbols.map((s) => ({
+          symbol: s, price: 10, currency: "USD", asOf: new Date("2026-07-08T16:00:00Z"),
+        })),
+      },
+    }, "2026-07-08");
+    expect(summary.fetched).toBe(1);
+    expect(summary.fxFetched).toBe(1);
+    expect(summary.valuationsUpserted).toBe(1);
+    expect(summary.errors).toHaveLength(0);
+    const valuation = db
+      .select()
+      .from(schema.assetValuations)
+      .where(eq(schema.assetValuations.assetId, "ast_us"))
+      .get();
+    expect(valuation?.priceSource).toBe("tradingview");
+    // 10 USD * 0.8 (1/1.25) = 8 EUR; 5 uds → 40 EUR
+    expect(valuation?.unitPriceEur).toBeCloseTo(8, 6);
+    expect(valuation?.marketValueEur).toBeCloseTo(40, 6);
+  });
+
+  it("dos activos con el mismo símbolo canónico rescatados a la vez: el choque de índice único degrada a error por fila, no aborta el run", async () => {
+    const db = makeDb();
+    db.insert(schema.assets).values({
+      id: "ast_a", name: "Dup A", assetType: "stock", currency: "EUR",
+      symbol: "DUP", providerSymbol: "DUP.MC", tradingviewSymbol: "BME:DUPA", isActive: true,
+    }).run();
+    db.insert(schema.assets).values({
+      id: "ast_b", name: "Dup B", assetType: "stock", currency: "EUR",
+      symbol: "DUP", providerSymbol: "DUP.MC", tradingviewSymbol: "BME:DUPB", isActive: true,
+    }).run();
+    const summary = await syncPrices(db, {
+      yahoo: { fetchQuote: async () => { throw new Error("429"); } },
+      coingecko: { fetchQuote: async () => { throw new Error("unused"); } },
+      ft: { fetchQuote: async () => { throw new Error("unused"); } },
+      tradingview: {
+        fetchQuote: async () => { throw new Error("unused"); },
+        fetchQuotes: async (symbols) => symbols.map((s) => ({
+          symbol: s, price: 1, currency: "EUR", asOf: new Date("2026-07-08T16:00:00Z"),
+        })),
+      },
+    }, "2026-07-08");
+    // El primero rescata; el segundo choca con (symbol, pricedDateUtc) y queda como error.
+    expect(summary.fetched).toBe(1);
+    expect(summary.errors).toHaveLength(1);
+    expect(summary.errors[0].message).toMatch(/UNIQUE/i);
+    expect(db.select().from(schema.priceHistory).all()).toHaveLength(1);
+  });
 });

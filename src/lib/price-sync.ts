@@ -253,20 +253,32 @@ export async function syncPrices(
         summary.errors.push({ assetId: r.asset.id, symbol: r.symbol, message: r.message });
         continue;
       }
-      quoteCurrencyByAsset.set(r.asset.id, quote.currency.toUpperCase());
-      await db
-        .insert(priceHistory)
-        .values({
-          id: ulid(),
+      // Aislamiento por fila: un insert fallido (p. ej. dos activos que
+      // resuelven al mismo símbolo canónico chocando con el índice único
+      // symbol+fecha) degrada a summary.errors como el resto de escrituras,
+      // sin abortar el run entero del cron.
+      try {
+        await db
+          .insert(priceHistory)
+          .values({
+            id: ulid(),
+            symbol: r.symbol,
+            price: quote.price,
+            pricedAt: quote.asOf.getTime(),
+            pricedDateUtc: today,
+            source: "tradingview",
+            createdAt: Date.now(),
+          })
+          .run();
+        quoteCurrencyByAsset.set(r.asset.id, quote.currency.toUpperCase());
+        summary.fetched++;
+      } catch (err) {
+        summary.errors.push({
+          assetId: r.asset.id,
           symbol: r.symbol,
-          price: quote.price,
-          pricedAt: quote.asOf.getTime(),
-          pricedDateUtc: today,
-          source: "tradingview",
-          createdAt: Date.now(),
-        })
-        .run();
-      summary.fetched++;
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 
