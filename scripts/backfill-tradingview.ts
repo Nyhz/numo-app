@@ -24,28 +24,34 @@ async function main() {
       console.log(`= ${asset.name}: ya resuelto`);
       continue;
     }
-    let tradingviewSymbol = asset.tradingviewSymbol;
-    let logoUrl = asset.logoUrl;
-    if (asset.assetType === "crypto") {
-      // CoinGecko: providerSymbol es el coin id ("ethereum"); el thumb sirve de logo.
-      const idOrName = asset.providerSymbol ?? asset.symbol ?? asset.name;
-      const coins = await searchCoins(idOrName);
-      const coin = coins.find((c) => c.id === asset.providerSymbol) ?? coins[0];
-      if ((force || logoUrl == null) && coin?.thumb) logoUrl = coin.thumb;
-    } else {
-      const res = await resolveTvListing(asset, {
-        searchSymbols: tradingview.searchSymbols,
-        fetchQuotes: tradingview.fetchQuotes,
-      });
-      if (force || tradingviewSymbol == null) tradingviewSymbol = res.tradingviewSymbol;
-      if (force || logoUrl == null) logoUrl = res.logoUrl;
+    // Un fallo transitorio (red, provider) en un activo no debe abortar el
+    // resto del batch: se registra y se sigue; otra pasada lo reintenta.
+    try {
+      let tradingviewSymbol = asset.tradingviewSymbol;
+      let logoUrl = asset.logoUrl;
+      if (asset.assetType === "crypto") {
+        // CoinGecko: providerSymbol es el coin id ("ethereum"); el thumb sirve de logo.
+        const idOrName = asset.providerSymbol ?? asset.symbol ?? asset.name;
+        const coins = await searchCoins(idOrName);
+        const coin = coins.find((c) => c.id === asset.providerSymbol) ?? coins[0];
+        if ((force || logoUrl == null) && coin?.thumb) logoUrl = coin.thumb;
+      } else {
+        const res = await resolveTvListing(asset, {
+          searchSymbols: tradingview.searchSymbols,
+          fetchQuotes: tradingview.fetchQuotes,
+        });
+        if (force || tradingviewSymbol == null) tradingviewSymbol = res.tradingviewSymbol;
+        if (force || logoUrl == null) logoUrl = res.logoUrl;
+      }
+      await db
+        .update(assets)
+        .set({ tradingviewSymbol, logoUrl, updatedAt: Date.now() })
+        .where(eq(assets.id, asset.id))
+        .run();
+      console.log(`✓ ${asset.name}: tv=${tradingviewSymbol ?? "—"} logo=${logoUrl ? "sí" : "—"}`);
+    } catch (err) {
+      console.error(`✗ ${asset.name}: ${err instanceof Error ? err.message : String(err)}`);
     }
-    await db
-      .update(assets)
-      .set({ tradingviewSymbol, logoUrl, updatedAt: Date.now() })
-      .where(eq(assets.id, asset.id))
-      .run();
-    console.log(`✓ ${asset.name}: tv=${tradingviewSymbol ?? "—"} logo=${logoUrl ? "sí" : "—"}`);
   }
 }
 

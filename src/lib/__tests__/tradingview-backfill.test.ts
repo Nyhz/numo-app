@@ -50,4 +50,43 @@ describe("resolveTvListing", () => {
     expect(soloLogo.tradingviewSymbol).toBeNull();
     expect(soloLogo.logoUrl).toBe("https://s3-symbol-logo.tradingview.com/wisdomtree.svg");
   });
+
+  it("sin ningún identificador devuelve nulls sin tocar los providers", async () => {
+    let searched = 0;
+    let quoted = 0;
+    const res = await resolveTvListing(
+      { isin: null, providerSymbol: null, symbol: null, ticker: null, currency: "EUR" },
+      {
+        searchSymbols: async () => {
+          searched++;
+          return HITS;
+        },
+        fetchQuotes: async () => {
+          quoted++;
+          return [];
+        },
+      },
+    );
+    expect(res).toEqual({ tradingviewSymbol: null, logoUrl: null });
+    expect(searched).toBe(0);
+    expect(quoted).toBe(0);
+  });
+
+  it("si symbol-search falla devuelve nulls en vez de propagar (el batch no muere)", async () => {
+    let quoted = 0;
+    const res = await resolveTvListing(
+      { isin: "IE00BMTM6D55", providerSymbol: null, symbol: "NGXA", ticker: null, currency: "EUR" },
+      {
+        searchSymbols: async () => {
+          throw new Error("tradingview search HTTP 429");
+        },
+        fetchQuotes: async () => {
+          quoted++;
+          return [];
+        },
+      },
+    );
+    expect(res).toEqual({ tradingviewSymbol: null, logoUrl: null });
+    expect(quoted).toBe(0);
+  });
 });

@@ -33,7 +33,15 @@ export async function resolveTvListing(
     asset.isin?.trim() || asset.providerSymbol?.trim() || asset.symbol?.trim() || asset.ticker?.trim();
   if (!query) return { tradingviewSymbol: null, logoUrl: null };
 
-  const hits = (await deps.searchSymbols(query)).filter((h) => USABLE_TYPES.has(h.type));
+  let found: TvSearchHit[] = [];
+  try {
+    found = await deps.searchSymbols(query);
+  } catch {
+    // symbol-search caído/rate-limited: nulls en vez de propagar; otra pasada
+    // del backfill (idempotente) lo reintenta sin abortar el resto del batch.
+    return { tradingviewSymbol: null, logoUrl: null };
+  }
+  const hits = found.filter((h) => USABLE_TYPES.has(h.type));
   if (hits.length === 0) return { tradingviewSymbol: null, logoUrl: null };
 
   // El logoid es el mismo en todos los listings del instrumento; vale cualquiera.
