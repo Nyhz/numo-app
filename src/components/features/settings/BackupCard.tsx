@@ -76,6 +76,8 @@ export function BackupCard({
       setResult(res.data);
       // El label se recalcula del disco en el server, no de este resultado.
       router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error de conexión.");
     } finally {
       setBusy(false);
     }
