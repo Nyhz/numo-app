@@ -3,6 +3,7 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "../../db/schema";
 import type { DB } from "../../db/client";
@@ -92,6 +93,32 @@ describe("asset schemas: tradingview + logo", () => {
   it("logoUrl inválida se rechaza", () => {
     const parsed = updateAssetSchema.safeParse({ id: "ast_1", logoUrl: "no-es-url" });
     expect(parsed.success).toBe(false);
+  });
+
+  it("createAssetSchema rechaza priceSource tradingview sin tradingviewSymbol", () => {
+    const parsed = createAssetSchema.safeParse({
+      name: "Amper",
+      symbol: "AMP.MC",
+      assetType: "stock",
+      currency: "EUR",
+      priceSource: "tradingview",
+    });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    const flat = z.flattenError(parsed.error);
+    expect(flat.fieldErrors.tradingviewSymbol).toBeDefined();
+  });
+
+  it("createAssetSchema acepta priceSource tradingview con tradingviewSymbol", () => {
+    const parsed = createAssetSchema.safeParse({
+      name: "Amper",
+      symbol: "AMP.MC",
+      assetType: "stock",
+      currency: "EUR",
+      priceSource: "tradingview",
+      tradingviewSymbol: "BME:AMP",
+    });
+    expect(parsed.success).toBe(true);
   });
 });
 

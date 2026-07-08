@@ -36,6 +36,17 @@ describe("tradingview.fetchQuotes", () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
+  it("deduplica símbolos repetidos (incl. espacios) en UNA sola llamada de red", async () => {
+    const fn = stubFetch({
+      data: [{ s: "BME:AMP", d: [0.2075, "EUR"] }],
+    });
+    await fetchQuotes(["BME:AMP", "BME:AMP", " BME:AMP "]);
+    expect(fn).toHaveBeenCalledOnce();
+    const [, init] = vi.mocked(fn).mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.symbols.tickers).toEqual(["BME:AMP"]);
+  });
+
   it("HTTP no-ok lanza", async () => {
     stubFetch({}, false, 429);
     await expect(fetchQuotes(["BME:AMP"])).rejects.toThrow(/429/);

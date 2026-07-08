@@ -27,6 +27,7 @@ function seedAsset(
     watchlisted?: boolean;
     active?: boolean;
     tradingviewSymbol?: string;
+    priceSource?: string;
   },
 ): string {
   const id = ulid();
@@ -38,6 +39,7 @@ function seedAsset(
       symbol: opts.symbol,
       providerSymbol: opts.symbol,
       tradingviewSymbol: opts.tradingviewSymbol,
+      priceSource: opts.priceSource,
       isWatchlisted: opts.watchlisted ?? true,
       isActive: opts.active ?? true,
     })
@@ -221,5 +223,83 @@ describe("syncWatchlistQuotes", () => {
     const q = db.select().from(schema.watchlistQuotes).where(eq(schema.watchlistQuotes.assetId, id)).get();
     expect(q?.source).toBe("tradingview");
     expect(q?.price).toBe(425.25);
+  });
+
+  it("cotiza como PRIMARIO por TradingView un activo con priceSource='tradingview'", async () => {
+    // Override manual: el activo nunca debe entrar en el batch Yahoo (su
+    // símbolo Yahoo-style, si lo tiene, ni siquiera existe en TV y viceversa),
+    // así que debe resolverse y cotizarse por TV desde el primer intento, no
+    // como rescate tras un miss de Yahoo.
+    const id = seedAsset(db, {
+      name: "Amper",
+      assetType: "stock",
+      symbol: "AMP.MC",
+      priceSource: "tradingview",
+      tradingviewSymbol: "BME:AMP",
+    });
+    const yahoo = vi.fn(async () => []);
+    const tv = vi.fn(async (symbols: string[]) =>
+      symbols.map((s) => ({ symbol: s, price: 0.2075, currency: "EUR", asOf: new Date(NOW) })),
+    );
+
+    const summary = await syncWatchlistQuotes(
+      db,
+      {
+        yahoo: { fetchQuotes: yahoo },
+        coingecko: { fetchQuotes: async () => [] },
+        tradingview: { fetchQuotes: tv },
+      },
+      NOW,
+    );
+
+    expect(summary.quoted).toBe(1);
+    // Nunca se intentó por Yahoo — el override es primario, no fallback.
+    expect(yahoo).not.toHaveBeenCalled();
+    expect(tv).toHaveBeenCalledWith(["BME:AMP"]);
+    const q = db.select().from(schema.watchlistQuotes).where(eq(schema.watchlistQuotes.assetId, id)).get();
+    expect(q?.source).toBe("tradingview");
+    expect(q?.price).toBe(0.2075);
+    expect(q?.currency).toBe("EUR");
+  });
+
+  it("un TradingView caído no rompe el tick — el resto de activos cotiza igual", async () => {
+    const tvId = seedAsset(db, {
+      name: "Amper",
+      assetType: "stock",
+      symbol: "AMP.MC",
+      priceSource: "tradingview",
+      tradingviewSymbol: "BME:AMP",
+    });
+    const yahooId = seedAsset(db, { name: "Apple", assetType: "stock", symbol: "AAPL" });
+
+    const summary = await syncWatchlistQuotes(
+      db,
+      {
+        yahoo: { fetchQuotes: async () => [{ symbol: "AAPL", price: 190, currency: "USD", asOf: new Date(NOW) }] },
+        coingecko: { fetchQuotes: async () => [] },
+        tradingview: {
+          fetchQuotes: async () => {
+            throw new Error("tradingview scan HTTP 503");
+          },
+        },
+      },
+      NOW,
+    );
+
+    // El activo Yahoo cotiza con normalidad pese al outage de TV.
+    expect(summary.quoted).toBe(1);
+    const yahooQuote = db
+      .select()
+      .from(schema.watchlistQuotes)
+      .where(eq(schema.watchlistQuotes.assetId, yahooId))
+      .get();
+    expect(yahooQuote?.price).toBe(190);
+    // El activo TV simplemente no refresca este tick — sin fila, sin excepción.
+    const tvQuote = db
+      .select()
+      .from(schema.watchlistQuotes)
+      .where(eq(schema.watchlistQuotes.assetId, tvId))
+      .get();
+    expect(tvQuote).toBeUndefined();
   });
 });

@@ -156,7 +156,9 @@ export async function syncPrices(
             ? "crypto asset missing providerSymbol (CoinGecko coin id)"
             : provider === "ft"
               ? "FT asset missing ISIN"
-              : "no provider symbol / symbol / ticker set",
+              : provider === "tradingview"
+                ? "tradingview asset missing tradingviewSymbol"
+                : "no provider symbol / symbol / ticker set",
       });
       continue;
     }

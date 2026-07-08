@@ -17,6 +17,7 @@ type FormState = {
   ter: string;
   exchange: string;
   providerSymbol: string;
+  tradingviewSymbol: string;
   priceSource: string;
   isActive: boolean;
 };
@@ -30,6 +31,7 @@ const INITIAL: FormState = {
   ter: "",
   exchange: "",
   providerSymbol: "",
+  tradingviewSymbol: "",
   priceSource: "",
   isActive: true,
 };
@@ -78,6 +80,7 @@ export function CreateAssetModal({
       ter: parseTer(form.ter),
       exchange: form.exchange.trim() ? form.exchange.trim() : null,
       providerSymbol: form.providerSymbol.trim() ? form.providerSymbol.trim() : null,
+      tradingviewSymbol: form.tradingviewSymbol.trim() ? form.tradingviewSymbol.trim() : null,
       priceSource: form.priceSource ? form.priceSource : null,
       isActive: form.isActive,
     };
@@ -212,6 +215,20 @@ export function CreateAssetModal({
             maxLength={64}
             placeholder="opcional — sustituye al símbolo en la sincronización de precios"
           />
+        </Field>
+
+        <Field label="Símbolo TradingView" errors={fieldErrors.tradingviewSymbol}>
+          <input
+            type="text"
+            value={form.tradingviewSymbol}
+            onChange={(e) => update("tradingviewSymbol", e.target.value)}
+            className={inputClass}
+            maxLength={64}
+            placeholder="BME:AMP"
+          />
+          <span className="text-xs text-muted-foreground">
+            Obligatorio si la fuente de precio es TradingView — formato EXCHANGE:TICKER.
+          </span>
         </Field>
 
         <Field label="Fuente de precio" errors={fieldErrors.priceSource}>

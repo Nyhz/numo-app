@@ -7,7 +7,7 @@ import { db as defaultDb, type DB } from "../db/client";
 import { assets, watchlistQuotes } from "../db/schema";
 import { providerForAsset } from "../lib/pricing";
 import { withRetry } from "../lib/pricing/_net";
-import { resolveSymbol } from "../lib/price-sync";
+import { priceSymbolForAsset } from "../lib/price-sync";
 import { type ActionResult, revalidateWatchlist } from "./_shared";
 
 const schema = z.object({ assetId: z.string().min(1) });
@@ -31,14 +31,19 @@ export async function refreshWatchlistQuote(
   if (!asset) {
     return { ok: false, error: { code: "not_found", message: "activo no encontrado" } };
   }
-  const symbol = resolveSymbol(asset);
+  // Resolve the symbol under the asset's EFFECTIVE provider (priceSource
+  // override or by-type default) — resolving with the default Yahoo-style
+  // symbol and then fetching from a different provider (e.g. `tradingview`)
+  // guarantees a miss, since e.g. a TV symbol like `BME:AMP` doesn't exist
+  // in Yahoo's namespace and vice versa.
+  const provider = providerForAsset(asset);
+  const symbol = priceSymbolForAsset(asset);
   if (!symbol) {
     // Nothing to fetch (no provider symbol) — not an error, just no quote.
     return { ok: true, data: { refreshed: false } };
   }
 
   try {
-    const provider = providerForAsset(asset);
     const quote = await withRetry(() => provider.fetchQuote(symbol));
     const now = Date.now();
     db.insert(watchlistQuotes)

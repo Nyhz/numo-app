@@ -129,10 +129,23 @@ export async function syncWatchlistQuotes(
   }
 
   // Group resolvable symbols by provider for a single batched call each.
+  // An explicit `priceSource='tradingview'` override is PRIMARY, not a
+  // fallback: the asset's Yahoo-style `symbol` (if any) doesn't exist in TV's
+  // namespace and vice versa, so it must never enter the Yahoo batch — that
+  // would be a guaranteed miss, leaving the asset quoted only by luck of the
+  // dormant Yahoo-miss rescue below (or never, if it has no Yahoo symbol).
   const yahooSymbols: string[] = [];
   const coingeckoSymbols: string[] = [];
+  const tvPrimarySymbols: string[] = [];
   const symbolByAsset = new Map<string, string>();
   for (const asset of watched) {
+    if (asset.priceSource === "tradingview") {
+      const tvSymbol = asset.tradingviewSymbol?.trim();
+      if (!tvSymbol) continue; // nothing to fetch — create-path validation should prevent this
+      symbolByAsset.set(asset.id, tvSymbol);
+      tvPrimarySymbols.push(tvSymbol);
+      continue;
+    }
     const symbol = resolveSymbol(asset);
     if (!symbol) continue;
     symbolByAsset.set(asset.id, symbol);
@@ -140,11 +153,14 @@ export async function syncWatchlistQuotes(
     else yahooSymbols.push(symbol);
   }
 
-  const [yahooQuotes, coingeckoQuotes] = await Promise.all([
+  const [yahooQuotes, coingeckoQuotes, tvPrimaryQuotes] = await Promise.all([
     yahooSymbols.length ? clients.yahoo.fetchQuotes(yahooSymbols) : Promise.resolve([]),
     coingeckoSymbols.length
       ? clients.coingecko.fetchQuotes(coingeckoSymbols)
       : Promise.resolve([]),
+    tvPrimarySymbols.length && clients.tradingview
+      ? clients.tradingview.fetchQuotes(tvPrimarySymbols).catch(() => [] as Quote[])
+      : Promise.resolve([] as Quote[]),
   ]);
 
   // Index quotes case-insensitively (Yahoo echoes uppercased, CoinGecko ids are
@@ -153,12 +169,16 @@ export async function syncWatchlistQuotes(
   for (const q of yahooQuotes) quoteBySymbol.set(q.symbol.toUpperCase(), { quote: q, source: "yahoo" });
   for (const q of coingeckoQuotes)
     quoteBySymbol.set(q.symbol.toUpperCase(), { quote: q, source: "coingecko" });
+  for (const q of tvPrimaryQuotes)
+    quoteBySymbol.set(q.symbol.toUpperCase(), { quote: q, source: "tradingview" });
 
-  // Fallback dormido: los no-cripto que Yahoo no devolvió y tienen símbolo TV
-  // se piden en UN batch al scanner y se reinyectan bajo su símbolo Yahoo, así
-  // el bucle de upsert no cambia.
+  // Fallback dormido: los no-cripto SIN override que Yahoo no devolvió y
+  // tienen símbolo TV se piden en UN batch al scanner y se reinyectan bajo su
+  // símbolo Yahoo, así el bucle de upsert no cambia. Los overrides TV
+  // primarios quedan excluidos — ya se intentaron arriba, no como rescate.
   const tvMisses = watched.filter((a) => {
-    if (a.assetType === "crypto" || !a.tradingviewSymbol?.trim()) return false;
+    if (a.assetType === "crypto" || a.priceSource === "tradingview" || !a.tradingviewSymbol?.trim())
+      return false;
     const symbol = symbolByAsset.get(a.id);
     return !!symbol && !quoteBySymbol.has(symbol.toUpperCase());
   });

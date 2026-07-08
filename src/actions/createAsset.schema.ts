@@ -42,6 +42,15 @@ export const createAssetSchema = z.object({
       message: "El ISIN es obligatorio para precios de Financial Times",
     });
   }
+  // TradingView is looked up by its own EXCHANGE:TICKER symbol — without one
+  // the sync can never resolve a quote for this asset (see price-sync.ts).
+  if (data.priceSource === "tradingview" && !data.tradingviewSymbol) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["tradingviewSymbol"],
+      message: "El símbolo TradingView es obligatorio para esa fuente de precio",
+    });
+  }
 });
 
 export type CreateAssetInput = z.input<typeof createAssetSchema>;
