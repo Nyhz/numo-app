@@ -47,8 +47,8 @@ describe("extractAndApplyMemory when the profile is at the byte budget", () => {
   });
 
   it("reports skipped adds instead of silently dropping them", async () => {
-    // Profile ~27 bytes under the 4096 cap: adding the header + bullet overflows it.
-    seedProfile(`# Perfil\n${"- nota: x\n".repeat(406)}`);
+    // Profile ~13 bytes under the 8192 cap: adding the header + bullet overflows it.
+    seedProfile(`# Perfil\n${"- nota: x\n".repeat(817)}`);
     runAdvisorOnceMock.mockResolvedValue({
       text: '{"ops":[{"op":"add","field":"edad","value":"35","reason":"lo dijo"}]}',
       ...OK_USAGE,

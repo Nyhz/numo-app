@@ -3,9 +3,24 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "../lib/domain";
-import { MemoryValidationError, appendChangelog, writeProfile } from "../lib/advisor/memory";
+import {
+  MemoryValidationError,
+  PROFILE_MAX_BYTES,
+  appendChangelog,
+  writeProfile,
+} from "../lib/advisor/memory";
 
-const schema = z.object({ content: z.string().trim().min(1).max(8000) });
+// Guard on the SAME byte budget writeProfile enforces (not a char count) so the
+// UI rejects up-front with a coherent message instead of surprising the user at save.
+const schema = z.object({
+  content: z
+    .string()
+    .trim()
+    .min(1, "El perfil no puede quedar vacío.")
+    .refine((s) => Buffer.byteLength(s, "utf8") <= PROFILE_MAX_BYTES, {
+      message: `El perfil no puede superar ${PROFILE_MAX_BYTES} bytes.`,
+    }),
+});
 
 /** Manual edit/seed of the personal profile (data/advisor/personal/profile.md). */
 export async function saveAdvisorProfile(
@@ -13,12 +28,14 @@ export async function saveAdvisorProfile(
 ): Promise<ActionResult<{ saved: true }>> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
+    const messages = parsed.error.issues.map((i) => i.message);
     return {
       ok: false,
       error: {
         code: "validation",
-        message: "Datos no válidos",
-        fieldErrors: { content: ["El perfil no puede estar vacío y debe caber en el presupuesto."] },
+        // ProfileEditor surfaces error.message directly, so put the real reason there.
+        message: messages.join(" ") || "Datos no válidos",
+        fieldErrors: { content: messages },
       },
     };
   }

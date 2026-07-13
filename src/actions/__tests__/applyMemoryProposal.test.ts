@@ -90,14 +90,14 @@ describe("applyMemoryProposal", () => {
 
     expect(runAdvisorOnceMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        systemPrompt: expect.stringContaining("4096"),
+        systemPrompt: expect.stringContaining("8192"),
         timeoutMs: expect.any(Number),
       }),
     );
   });
 
   it("keeps the proposal and the profile intact when the rewrite exceeds the budget", async () => {
-    runAdvisorOnceMock.mockResolvedValue({ text: "x".repeat(5000), ...OK_USAGE });
+    runAdvisorOnceMock.mockResolvedValue({ text: "x".repeat(9000), ...OK_USAGE });
 
     const res = await applyMemoryProposal({ id: PROPOSAL.id, decision: "confirm" });
 

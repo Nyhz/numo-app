@@ -60,7 +60,7 @@ describe("writeProfile validation (anti-wipe / budget)", () => {
   });
 
   it("rejects a profile over the byte budget", () => {
-    const huge = "x".repeat(5000); // > default 4096
+    const huge = "x".repeat(9000); // > default 8192
     expect(() => writeProfile(huge)).toThrow(MemoryValidationError);
   });
 });

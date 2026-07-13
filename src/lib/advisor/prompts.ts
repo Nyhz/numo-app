@@ -46,18 +46,28 @@ export function buildChatPrompt(
   return lines.join("\n");
 }
 
-export const MEMORY_EXTRACT_SYSTEM = `Eres un extractor de memoria. A partir de un intercambio entre el usuario y su asesor financiero, identifica HECHOS DURADEROS sobre el usuario que merezca la pena recordar para futuras conversaciones: edad, situación personal/laboral, horizonte temporal, tolerancia al riesgo, objetivos de inversión, preferencias y restricciones.
+export const MEMORY_EXTRACT_SYSTEM = `Eres un extractor de memoria. A partir de un intercambio entre el usuario y su asesor financiero, identifica HECHOS DURADEROS sobre el usuario que merezca la pena recordar para futuras conversaciones: edad, situación personal/laboral, horizonte temporal, tolerancia al riesgo, objetivos de inversión, preferencias y restricciones. Tus notas viven bajo «## Notas del asesor» en el perfil, que se te pasa entero abajo.
 
 Devuelve EXCLUSIVAMENTE un objeto JSON con esta forma, sin texto adicional ni bloques markdown:
 {"ops":[{"op":"add|update|remove","field":"<etiqueta corta>","value":"<valor; omitir en remove>","reason":"<por qué>"}]}
 
 Reglas:
-- "add": un hecho NUEVO que no está en el perfil actual.
-- "update": cambia un hecho existente (un objetivo, la situación) por uno nuevo.
-- "remove": un hecho del perfil que ha quedado obsoleto.
+- "add": un hecho NUEVO que no está —ni de forma equivalente— en el perfil actual.
+- "update": refina o corrige un hecho existente (reutiliza su "field") por uno nuevo.
+- "remove": un hecho del perfil que ha quedado obsoleto, superado o contradicho.
 - NO guardes trivialidades, datos de mercado, ni cifras de la cartera (ya están en vivo).
-- Si no hay nada que guardar, devuelve {"ops":[]}.`;
+- Si no hay nada que guardar, devuelve {"ops":[]}.
+
+Higiene de la memoria (el perfil comparte un presupuesto de bytes limitado; trátalo como espacio escaso):
+- Antes de un "add", comprueba el perfil actual: si ya existe una nota igual o solapada, NO dupliques; usa "update" sobre su "field" para consolidarla, o no emitas nada.
+- Prefiere fusionar y condensar antes que acumular: cada nota debe ser atómica, breve y sin redundancia. Una etiqueta ("field"), un hecho.
+- Poda de forma proactiva: si el intercambio deja obsoleta o redundante una nota vieja, emite su "remove" (o "update" que la absorba) en el mismo lote.
+- Ante la duda, guarda menos. Solo lo duradero y que cambie el consejo futuro.`;
 
 export function buildApplyProposalSystem(maxBytes: number): string {
-  return `Eres un editor del perfil personal del usuario. Recibes el perfil actual (markdown) y UN cambio confirmado. Devuelve EXCLUSIVAMENTE el perfil completo actualizado en markdown, sin comentarios ni explicaciones. Aplica solo ese cambio; conserva todo lo demás intacto y bien estructurado. LÍMITE ESTRICTO: el perfil resultante no puede superar ${maxBytes} bytes; si el cambio no cabe, condensa primero las notas menos importantes (fusiona duplicados, acorta redacción) sin perder hechos esenciales.`;
+  return `Eres un editor del perfil personal del usuario. Recibes el perfil actual (markdown) y UN cambio confirmado. Devuelve EXCLUSIVAMENTE el perfil completo actualizado en markdown, sin comentarios ni explicaciones. Aplica solo ese cambio; conserva todo lo demás intacto y bien estructurado.
+
+La sección «## Notas del asesor» es tuya: mantenla limpia. Al aplicar el cambio, aprovecha para fusionar notas duplicadas o solapadas, absorber las obsoletas y acortar la redacción prolija, sin perder ningún hecho esencial ni tocar las secciones que describen al usuario.
+
+LÍMITE ESTRICTO: el perfil resultante no puede superar ${maxBytes} bytes. Es un presupuesto compartido y escaso; si el cambio no cabe, condensa primero las notas menos importantes (fusiona duplicados, poda lo superado, acorta) hasta que quepa.`;
 }

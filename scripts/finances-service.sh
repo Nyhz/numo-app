@@ -27,6 +27,18 @@ if [ -f "$MODE_FILE" ]; then
   MODE=$(cat "$MODE_FILE" | tr -d '[:space:]')
 fi
 
+# Back up + migrate the DB before (re)starting. `next start` never migrates on
+# its own, so without this any feature shipping a new migration 500s in prod
+# until migrated by hand. drizzle's migrate is idempotent (a no-op when nothing
+# is pending), so this is safe on every restart; the backup is a single
+# overwritten VACUUM INTO snapshot taken just before we touch the DB. A backup
+# failure only warns; a migration failure aborts (set -e) so we never serve
+# against a half-migrated DB.
+echo "[FINANCES] Backing up DB before migrate..."
+pnpm db:backup || echo "[FINANCES] WARN: pre-migrate backup failed — continuing"
+echo "[FINANCES] Applying pending migrations..."
+pnpm db:migrate
+
 # Pre-start cleanup — kill any process still holding our port from a previous
 # run. launchd's SIGKILL bypasses our SIGTERM trap, leaving orphan servers
 # (and multi-GB of leaked turbopack cache) behind.

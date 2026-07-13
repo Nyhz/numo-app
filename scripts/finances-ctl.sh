@@ -13,6 +13,7 @@
 set -euo pipefail
 
 SERVICE_LABEL="com.finances.app"
+TGBOT_LABEL="com.finances.tg-bot"
 PLIST="$HOME/Library/LaunchAgents/${SERVICE_LABEL}.plist"
 MODE_FILE="$HOME/.finances/mode"
 LOG_FILE="$HOME/.finances/logs/finances.log"
@@ -91,10 +92,23 @@ cmd_stop() {
   echo -e "${DIM}Finances stopped.${RESET}"
 }
 
+# The Telegram bot is a long-running daemon (tsx long-polling) that caches the
+# compiled module graph at boot. After a code change it keeps serving stale
+# schema/advisor code — e.g. a drizzle "undefined table" crash on /ask when the
+# real-estate exports were added after the bot last started. Reload it whenever
+# the app is rebuilt so both share the same source.
+restart_tgbot() {
+  if launchctl print "${GUI_DOMAIN}/${TGBOT_LABEL}" &>/dev/null; then
+    echo "Restarting Telegram bot..."
+    launchctl kickstart -k "${GUI_DOMAIN}/${TGBOT_LABEL}" 2>/dev/null || true
+  fi
+}
+
 cmd_restart() {
   if ! is_running; then
     echo -e "${AMBER}Finances is not running. Starting...${RESET}"
     cmd_start
+    restart_tgbot
     return
   fi
   echo "Restarting Finances..."
@@ -103,6 +117,7 @@ cmd_restart() {
     sleep 1
     cmd_start
   fi
+  restart_tgbot
   echo -e "${GREEN}Finances restarted in $(get_mode) mode.${RESET}"
 }
 
