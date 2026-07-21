@@ -10,6 +10,7 @@ import {
 } from "../db/schema";
 import { getAccountsSummary } from "./accounts";
 import { materializedNetWorthByDate } from "./dailyBalances";
+import { backAdjustFactor, loadSplitEvents } from "./splitAdjust";
 import { getRealEstateEquityAt, getRealEstateEquityByDate } from "./realEstate";
 import { applySplitFactor, isCashBearingAccount, splitFactorOf } from "../lib/domain";
 import { todayIsoLocal } from "../lib/asof";
@@ -751,6 +752,10 @@ export async function getTopPositions(
       .where(and(...conds))
       .orderBy(asc(assetValuations.valuationDate))
       .all();
+    // Retro-ajuste del precio unitario del sparkline: los puntos anteriores a
+    // un canje se expresan en unidades post-canje para que la serie de precio
+    // sea continua (el valueEur ya lo es por construcción).
+    const splitsByAsset = loadSplitEvents(db, assetIds);
     // Per-asset running invested: starts at the pre-range cumulative, and
     // picks up trade-day deltas as we walk ordered valuations.
     const runningInvestedByAsset = new Map<string, number>();
@@ -774,7 +779,9 @@ export async function getTopPositions(
         date: v.valuationDate,
         valueEur: v.marketValueEur,
         investedEur: runningInvestedByAsset.get(v.assetId) ?? 0,
-        unitPriceEur: v.unitPriceEur,
+        unitPriceEur:
+          v.unitPriceEur *
+          backAdjustFactor(splitsByAsset.get(v.assetId), v.valuationDate),
       });
       valuationsByAsset.set(v.assetId, list);
     }

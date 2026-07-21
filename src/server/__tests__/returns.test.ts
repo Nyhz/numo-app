@@ -65,6 +65,34 @@ describe("getPeriodReturns", () => {
     expect(r["1y"]).toBeNull(); // corte 1y (2025-07-08) es anterior a toda la serie
   });
 
+  it("una ventana que cruza un contra-split mide el movimiento real, no el salto ×M/N", async () => {
+    const db = makeDb();
+    // Amper-like: 0.20 € pre-canje, contra-split 1:25 el 2026-07-20, 5.181 € después.
+    seedValuations(db, "ast_split", [
+      ["2026-06-19", 0.2], // ≤ corte 1m (2026-06-21) → baseline de la ventana
+      ["2026-07-17", 0.207],
+      ["2026-07-20", 5.181],
+    ]);
+    db.insert(schema.accounts)
+      .values({ id: "acc_s", name: "DEGIRO", currency: "EUR", accountType: "broker", openingBalanceEur: 0, currentCashBalanceEur: 0 })
+      .run();
+    db.insert(schema.assetTransactions).values({
+      id: "txn_split", accountId: "acc_s", assetId: "ast_split",
+      transactionType: "split", tradedAt: Date.UTC(2026, 6, 20),
+      splitNumerator: 1, splitDenominator: 25,
+      quantity: 0, unitPrice: 0, tradeCurrency: "EUR", fxRateToEur: 1,
+      tradeGrossAmount: 0, tradeGrossAmountEur: 0, cashImpactEur: 0,
+      feesAmount: 0, feesAmountEur: 0, netAmountEur: 0,
+      isListed: false, source: "manual",
+    }).run();
+
+    const map = await getPeriodReturns(["ast_split"], db, "2026-07-21");
+    const r = map.get("ast_split")!;
+    // Baseline 1m = 0.20 € → 5.00 € retro-ajustado; 5.181/5.00 − 1 ≈ +3.62%,
+    // no el +2.490% que daría el precio crudo.
+    expect(r["1m"]).toBeCloseTo(5.181 / 5.0 - 1, 10);
+  });
+
   it("activo sin valoraciones → todas null; ids vacíos → mapa vacío", async () => {
     const db = makeDb();
     db.insert(schema.assets)

@@ -8,6 +8,7 @@
 import { asc, inArray } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
 import { assetValuations } from "../db/schema";
+import { backAdjustFactor, loadSplitEvents } from "./splitAdjust";
 import { toIsoDate } from "../lib/time";
 
 export const RETURN_PERIODS = ["1m", "3m", "6m", "ytd", "1y"] as const;
@@ -51,11 +52,20 @@ export async function getPeriodReturns(
     .orderBy(asc(assetValuations.valuationDate))
     .all();
 
+  // Retro-ajuste por splits: sin él, la ventana que cruza un canje mediría
+  // el salto ×(M/N) del precio crudo como retorno.
+  const splitsByAsset = loadSplitEvents(db, assetIds);
+
   const byAsset = new Map<string, { date: string; price: number }[]>();
   for (const r of rows) {
     if (r.valuationDate > todayIso) continue;
     const list = byAsset.get(r.assetId) ?? [];
-    list.push({ date: r.valuationDate, price: r.unitPriceEur });
+    list.push({
+      date: r.valuationDate,
+      price:
+        r.unitPriceEur *
+        backAdjustFactor(splitsByAsset.get(r.assetId), r.valuationDate),
+    });
     byAsset.set(r.assetId, list);
   }
 
