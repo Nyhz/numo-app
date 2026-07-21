@@ -37,6 +37,9 @@ export function buildScanSystem(focus: string, sources: string[], currentDigest:
 ${focus}
 Además, el macro que afecta a esa exposición: tipos de interés (BCE/Fed), EUR/USD, inflación, tecnología de EE. UU., emergentes de Asia, oro, criptomonedas y geopolítica relevante.
 
+# Solo activos en cartera
+Las entradas ESPECÍFICAS de un activo (Riesgos, Oportunidades, Watchlist) deben referirse ÚNICAMENTE a activos del Foco de arriba (los que el usuario posee AHORA). Si un activo estaba en el digest previo pero ya NO aparece en el Foco, el usuario lo ha vendido: ELIMINA de inmediato todas sus entradas y no vuelvas a introducirlo, aunque su tesis siga viva. El macro/geopolítica general se mantiene mientras afecte a la cartera actual, pero sin anclarlo a un ticker que ya no está en el Foco.
+
 # Fuentes prioritarias
 Prioriza prensa económica reputada: ${sources.join(", ")}. IGNORA redes sociales, foros y rumores sin fundamento. Cita siempre la fuente con su URL.
 

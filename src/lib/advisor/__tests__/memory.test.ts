@@ -15,7 +15,8 @@ import {
   writeProfile,
 } from "../memory";
 import { parseMemoryOps } from "../extractMemory";
-import { parseScanOutput } from "../scan";
+import { buildScanSystem, parseScanOutput } from "../scan";
+import { buildCurateSystem } from "../curate";
 
 let dir: string;
 beforeAll(() => {
@@ -173,5 +174,32 @@ Buenos días. Hoy destaca X.`;
 
   it("returns null when the digest section is empty", () => {
     expect(parseScanOutput("===JOURNAL===\nx\n===DIGEST===\n\n===SUMMARY===\nz")).toBeNull();
+  });
+});
+
+describe("buildScanSystem (guardrail de cartera)", () => {
+  it("ordena eliminar del digest los activos que ya no están en el Foco (candado: posiciones vendidas no se auto-perpetúan en el brief)", () => {
+    const system = buildScanSystem("Activos en cartera:\n- VWCE", ["ft.com"], "digest previo");
+    expect(system).toContain("# Solo activos en cartera");
+    expect(system).toContain("lo ha vendido");
+    expect(system).toContain("no vuelvas a introducirlo");
+    // La regla debe preceder al digest arrastrado, que es lo que corrige.
+    expect(system.indexOf("# Solo activos en cartera")).toBeLessThan(system.indexOf("# Digest actual"));
+  });
+});
+
+describe("buildCurateSystem (guardrail de cartera)", () => {
+  it("recibe la cartera y prohíbe reintroducir desde el journal activos ya vendidos", () => {
+    const system = buildCurateSystem(
+      "Activos en cartera:\n- VWCE",
+      "digest previo",
+      "journal crudo",
+      new Date("2026-07-21T00:00:00Z"),
+    );
+    expect(system).toContain("# Cartera actual");
+    expect(system).toContain("YA VENDIÓ");
+    expect(system).toContain("no los reintroduzcas");
+    // La regla debe preceder al journal, que es la fuente del rebrote.
+    expect(system.indexOf("# Cartera actual")).toBeLessThan(system.indexOf("# Journal crudo"));
   });
 });

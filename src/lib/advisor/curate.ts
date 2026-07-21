@@ -10,8 +10,17 @@ function stripFences(text: string): string {
     .trim();
 }
 
-export function buildCurateSystem(currentDigest: string, journal: string, now: Date): string {
+export function buildCurateSystem(
+  focus: string,
+  currentDigest: string,
+  journal: string,
+  now: Date,
+): string {
   return `Eres el curador del digest de mercados del usuario (inversor particular español, EUR). Tu trabajo NO es buscar noticias nuevas, sino **reconstruir y depurar** el digest desde cero a partir del registro crudo (journal) y el digest previo, para mantenerlo limpio, denso y vigente.
+
+# Cartera actual
+${focus}
+Las entradas ESPECÍFICAS de un activo (Riesgos, Oportunidades, Watchlist) deben referirse ÚNICAMENTE a activos de la cartera actual. El journal es un registro histórico: puede mencionar activos que el usuario YA VENDIÓ — no los reintroduzcas en el digest aunque su tesis siga viva. El macro/geopolítica general se mantiene mientras afecte a la cartera actual, sin anclarlo a tickers que ya no están en ella.
 
 # Digest previo
 ${currentDigest || "(vacío)"}
@@ -40,6 +49,9 @@ Devuelve SOLO el digest markdown, sin comentarios ni explicaciones, sin bloques 
 
 /** Weekly rebuild of the digest from the raw journal (anti-drift compaction). */
 export async function runCurate(opts: {
+  /** Cartera en vivo (getScanFocus) — sin ella el curador resucitaría del
+   *  journal activos ya vendidos. */
+  focus: string;
   model: string;
   now: Date;
 }): Promise<{ usage: AdvisorUsage }> {
@@ -48,7 +60,7 @@ export async function runCurate(opts: {
   if (!currentDigest.trim() && !journal.trim()) {
     throw new Error("No hay digest ni journal que curar todavía.");
   }
-  const system = buildCurateSystem(currentDigest, journal, opts.now);
+  const system = buildCurateSystem(opts.focus, currentDigest, journal, opts.now);
   const call = (sys: string) =>
     runAdvisorOnce({
       model: opts.model,

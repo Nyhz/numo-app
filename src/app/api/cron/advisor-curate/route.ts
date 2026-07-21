@@ -3,6 +3,7 @@ import { db } from "@/src/db/client";
 import { advisorRuns } from "@/src/db/schema";
 import { isoWeekKey } from "@/src/lib/advisor/dates";
 import { runCurate } from "@/src/lib/advisor/curate";
+import { getScanFocus } from "@/src/server/advisor";
 import { readAdvisorConfig } from "@/src/lib/advisor/config";
 import { recordAdvisorRun } from "@/src/lib/advisor/runs";
 
@@ -41,7 +42,8 @@ async function handle(req: Request): Promise<Response> {
     const startedAt = Date.now();
     const model = process.env.ADVISOR_SCAN_MODEL ?? "claude-sonnet-4-6";
     try {
-      const r = await runCurate({ model, now });
+      const focus = await getScanFocus();
+      const r = await runCurate({ focus, model, now });
       recordAdvisorRun({
         kind: "curate",
         slot,
