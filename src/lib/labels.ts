@@ -38,6 +38,9 @@ export const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   // Distinto del kind de caja "transfer-out": esto es salida de UNIDADES de
   // un activo a custodia externa, sin venta fiscal ni movimiento de efectivo.
   transfer_out: "Retirada de activo",
+  // Canje N:M (split o contra-split): re-escala la cantidad sin venta fiscal
+  // ni caja; el factor viaja en splitNumerator/splitDenominator.
+  split: "Split",
 };
 
 export function transactionTypeLabel(type: string): string {
@@ -125,6 +128,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   create: "Alta",
   "create-dividend": "Alta de dividendo",
   "create-swap": "Alta de canje",
+  "create-asset-split": "Alta de split",
   update: "Edición",
   delete: "Borrado",
   deactivate: "Desactivación",

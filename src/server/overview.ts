@@ -11,7 +11,7 @@ import {
 import { getAccountsSummary } from "./accounts";
 import { materializedNetWorthByDate } from "./dailyBalances";
 import { getRealEstateEquityAt, getRealEstateEquityByDate } from "./realEstate";
-import { isCashBearingAccount } from "../lib/domain";
+import { applySplitFactor, isCashBearingAccount, splitFactorOf } from "../lib/domain";
 import { todayIsoLocal } from "../lib/asof";
 import { toIsoDate } from "../lib/time";
 import { computeXirr, type CashFlow } from "../lib/xirr";
@@ -480,24 +480,41 @@ async function computeNetWorthSeries(
       transactionType: assetTransactions.transactionType,
       tradedAt: assetTransactions.tradedAt,
       quantity: assetTransactions.quantity,
+      splitNumerator: assetTransactions.splitNumerator,
+      splitDenominator: assetTransactions.splitDenominator,
     })
     .from(assetTransactions)
     .where(inArray(assetTransactions.assetId, scopeAssetIdList))
     .orderBy(asc(assetTransactions.tradedAt))
     .all();
-  const tradesByAsset = new Map<string, Array<{ tradedAt: number; signedQty: number }>>();
+  // Mismo cursor (buy/sell/transfer_out suman/restan; split escala N:M) que
+  // rebuildDailyBalances — la paridad de ambas series está fijada por test.
+  type QtyEvent = {
+    tradedAt: number;
+    signedQty: number;
+    split?: { numerator: number; denominator: number };
+  };
+  const tradesByAsset = new Map<string, QtyEvent[]>();
   for (const t of qtyTrades) {
+    let event: QtyEvent;
     if (
-      t.transactionType !== "buy" &&
-      t.transactionType !== "sell" &&
-      t.transactionType !== "transfer_out"
-    )
+      t.transactionType === "buy" ||
+      t.transactionType === "sell" ||
+      t.transactionType === "transfer_out"
+    ) {
+      event = {
+        tradedAt: t.tradedAt,
+        signedQty: t.transactionType === "buy" ? t.quantity : -t.quantity,
+      };
+    } else if (t.transactionType === "split") {
+      const factor = splitFactorOf(t);
+      if (!factor) continue;
+      event = { tradedAt: t.tradedAt, signedQty: 0, split: factor };
+    } else {
       continue;
+    }
     const list = tradesByAsset.get(t.assetId) ?? [];
-    list.push({
-      tradedAt: t.tradedAt,
-      signedQty: t.transactionType === "buy" ? t.quantity : -t.quantity,
-    });
+    list.push(event);
     tradesByAsset.set(t.assetId, list);
   }
 
@@ -518,7 +535,10 @@ async function computeNetWorthSeries(
       }
       const dayEnd = new Date(`${date}T23:59:59Z`).getTime();
       while (tradeIdx < trades.length && trades[tradeIdx].tradedAt <= dayEnd) {
-        qty += trades[tradeIdx].signedQty;
+        const ev = trades[tradeIdx];
+        qty = ev.split
+          ? applySplitFactor(qty, ev.split.numerator, ev.split.denominator)
+          : qty + ev.signedQty;
         tradeIdx++;
       }
       if (!seen) continue; // asset hasn't had its first valuation yet

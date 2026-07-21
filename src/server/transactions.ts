@@ -83,7 +83,8 @@ export type LedgerEntry =
       label: string;
       amountEur: number;
       assetId: string;
-      quantity: number;
+      /** null en filas split: su dato es el factor N:M, no una cantidad. */
+      quantity: number | null;
       description: string | null;
       source: AssetTransaction;
     }
@@ -181,7 +182,9 @@ export async function getLedgerForAccount(
       label: r.transactionType,
       amountEur: r.cashImpactEur,
       assetId: r.assetId,
-      quantity: r.quantity,
+      // Una fila split no tiene cantidad propia (su dato es el factor N:M,
+      // que ya viaja en las notas) — null evita un «· 0.0000» en el ledger.
+      quantity: r.transactionType === "split" ? null : r.quantity,
       description: r.notes,
       source: r,
     })),

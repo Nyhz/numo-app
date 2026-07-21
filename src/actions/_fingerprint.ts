@@ -82,6 +82,24 @@ export function assetWithdrawalFingerprint(parts: {
   return createHash("sha256").update(key).digest("hex");
 }
 
+export function assetSplitFingerprint(parts: {
+  assetId: string;
+  effectiveDate: string;
+  newShares: number;
+  oldShares: number;
+}): string {
+  // Sin accountId: el canje es del ACTIVO (escala todas las custodias), así
+  // que dos registros del mismo split en cuentas distintas son el mismo hecho.
+  const key = [
+    "manual-asset-split",
+    parts.assetId,
+    parts.effectiveDate,
+    String(parts.newShares),
+    String(parts.oldShares),
+  ].join("|");
+  return createHash("sha256").update(key).digest("hex");
+}
+
 export function cashMovementFingerprint(parts: {
   accountId: string;
   kind: string;

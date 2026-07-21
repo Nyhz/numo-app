@@ -8,6 +8,7 @@ import {
   assetValuations,
   dailyBalances,
 } from "../db/schema";
+import { applySplitFactor, splitFactorOf } from "../lib/domain";
 import { roundEur } from "../lib/money";
 import { ulid } from "ulid";
 
@@ -119,25 +120,35 @@ export function rebuildDailyBalances(db: DB = defaultDb): number {
     const orderedDates = [...datesSet].sort();
     if (orderedDates.length === 0) return 0;
 
-    // Cursor de cantidad por activo (buy/sell/transfer_out): una posición
-    // cerrada deja de aportar aunque su última valoración siga existiendo.
-    const tradesByAsset = new Map<string, Array<{ tradedAt: number; signedQty: number }>>();
+    // Cursor de cantidad por activo (buy/sell/transfer_out suman/restan;
+    // split escala por su factor N:M): una posición cerrada deja de aportar
+    // aunque su última valoración siga existiendo.
+    type QtyEvent = {
+      tradedAt: number;
+      signedQty: number;
+      split?: { numerator: number; denominator: number };
+    };
+    const tradesByAsset = new Map<string, QtyEvent[]>();
     // Atribución por cuenta: la última cuenta que operó el activo (mismo
     // criterio que primaryAccountByAsset en el Extracto).
     const accountByAsset = new Map<string, string>();
     for (const t of trades) {
       accountByAsset.set(t.assetId, t.accountId);
-      if (
-        t.transactionType !== "buy" &&
-        t.transactionType !== "sell" &&
-        t.transactionType !== "transfer_out"
-      )
+      let event: QtyEvent;
+      if (t.transactionType === "buy" || t.transactionType === "sell" || t.transactionType === "transfer_out") {
+        event = {
+          tradedAt: t.tradedAt,
+          signedQty: t.transactionType === "buy" ? t.quantity : -t.quantity,
+        };
+      } else if (t.transactionType === "split") {
+        const factor = splitFactorOf(t);
+        if (!factor) continue;
+        event = { tradedAt: t.tradedAt, signedQty: 0, split: factor };
+      } else {
         continue;
+      }
       const list = tradesByAsset.get(t.assetId) ?? [];
-      list.push({
-        tradedAt: t.tradedAt,
-        signedQty: t.transactionType === "buy" ? t.quantity : -t.quantity,
-      });
+      list.push(event);
       tradesByAsset.set(t.assetId, list);
     }
 
@@ -164,7 +175,10 @@ export function rebuildDailyBalances(db: DB = defaultDb): number {
         }
         const dayEnd = new Date(`${date}T23:59:59Z`).getTime();
         while (tradeIdx < assetTradeList.length && assetTradeList[tradeIdx].tradedAt <= dayEnd) {
-          qty += assetTradeList[tradeIdx].signedQty;
+          const ev = assetTradeList[tradeIdx];
+          qty = ev.split
+            ? applySplitFactor(qty, ev.split.numerator, ev.split.denominator)
+            : qty + ev.signedQty;
           tradeIdx++;
         }
         if (!seen) continue;

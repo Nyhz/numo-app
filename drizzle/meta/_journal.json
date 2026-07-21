@@ -211,6 +211,13 @@
       "when": 1783537157187,
       "tag": "0029_plain_falcon",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1784621898215,
+      "tag": "0030_late_pet_avengers",
+      "breakpoints": true
     }
   ]
 }

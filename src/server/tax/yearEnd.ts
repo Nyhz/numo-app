@@ -1,4 +1,5 @@
 import { and, asc, inArray, lt, lte } from "drizzle-orm";
+import { applySplitFactor, splitFactorOf } from "../../lib/domain";
 import { roundEur } from "../../lib/money";
 import { marketEur, type MarketEur } from "../../lib/money-types";
 import type { DB } from "../../db/client";
@@ -96,13 +97,29 @@ export function buildYearEndBalances(db: DB, end: number): YearEndBalance[] {
   // homogeneous-values rule), so a sell at broker B can drain lots opened at
   // broker A — but the units still sit at broker A. Custody, which is what
   // M720 declares, is the per-account signed sum of trades.
+  // Orden cronológico: con sumas puras daría igual, pero un split multiplica
+  // el saldo acumulado hasta su fecha — el replay deja de ser conmutativo.
   const ledgerRows = db
     .select()
     .from(assetTransactions)
     .where(lt(assetTransactions.tradedAt, end))
+    .orderBy(asc(assetTransactions.tradedAt), asc(assetTransactions.id))
     .all();
   const byKey = new Map<string, { accountId: string; assetId: string; qty: number }>();
   for (const t of ledgerRows) {
+    if (t.transactionType === "split") {
+      // El canje afecta a las unidades del activo en TODAS las cuentas que lo
+      // custodian, no solo en la cuenta de la fila que lo registró.
+      const factor = splitFactorOf(t);
+      if (factor) {
+        for (const cur of byKey.values()) {
+          if (cur.assetId === t.assetId) {
+            cur.qty = applySplitFactor(cur.qty, factor.numerator, factor.denominator);
+          }
+        }
+      }
+      continue;
+    }
     if (
       t.transactionType !== "buy" &&
       t.transactionType !== "sell" &&

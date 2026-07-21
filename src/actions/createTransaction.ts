@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { ulid } from "ulid";
 import { z } from "zod";
 import { db as defaultDb, type DB } from "../db/client";
@@ -20,6 +20,7 @@ import {
 } from "./_shared";
 import { transactionFingerprint } from "./_fingerprint";
 import { rebuildAfterTradeMutation } from "../server/rebuild";
+import { foldLedger } from "../server/recompute";
 import { FxDeviationError, FxManualRequiredError, requireManualFx } from "./_fx";
 import { round as roundNative, roundEur as round } from "../lib/money";
 
@@ -63,29 +64,17 @@ export async function createTransaction(
 
       // Audit H5: pre-check sells against units actually held so an oversell
       // surfaces as a quantity error, not as the FIFO engine's internal abort.
-      // Holdings are summed across all accounts — FIFO lots are global per asset.
+      // Holdings are summed across all accounts — FIFO lots are global per
+      // asset. foldLedger es la única matemática de replay (un split escala
+      // el saldo, así que la suma exige orden cronológico).
       if (data.side === "sell") {
         const ledger = tx
-          .select({
-            quantity: assetTransactions.quantity,
-            transactionType: assetTransactions.transactionType,
-          })
+          .select()
           .from(assetTransactions)
           .where(eq(assetTransactions.assetId, data.assetId))
+          .orderBy(asc(assetTransactions.tradedAt), asc(assetTransactions.id))
           .all();
-        const held = ledger.reduce(
-          (sum, row) =>
-            row.transactionType === "buy"
-              ? sum + row.quantity
-              : // sell y transfer_out (retirada a custodia externa) drenan
-                // unidades del pool por igual — ignorar transfer_out sobrestima
-                // lo disponible y deja pasar un oversell.
-                row.transactionType === "sell" ||
-                  row.transactionType === "transfer_out"
-                ? sum - row.quantity
-                : sum,
-          0,
-        );
+        const held = foldLedger(ledger).qty;
         if (data.quantity > held + 1e-9) {
           throw new Error(`oversell: ${held}`);
         }

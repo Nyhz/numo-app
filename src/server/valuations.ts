@@ -8,6 +8,7 @@ import {
   fxRates,
   priceHistory,
 } from "../db/schema";
+import { applySplitFactor, splitFactorOf } from "../lib/domain";
 import { round } from "../lib/money";
 import { invalidateDailyBalancesFrom } from "./dailyBalances";
 import { priceSymbolForAsset } from "../lib/price-sync";
@@ -142,6 +143,11 @@ export function rebuildValuationsForAsset(
       if (t.transactionType === "buy") runningQty += t.quantity;
       else if (t.transactionType === "sell" || t.transactionType === "transfer_out")
         runningQty -= t.quantity;
+      else if (t.transactionType === "split") {
+        const factor = splitFactorOf(t);
+        if (factor)
+          runningQty = applySplitFactor(runningQty, factor.numerator, factor.denominator);
+      }
       tradeIdx++;
     }
     if (lastPrice == null || lastFx == null) continue;

@@ -6,7 +6,7 @@ import {
   assetPositions,
   assetTransactions,
 } from "../db/schema";
-import { isCashBearingAccount } from "../lib/domain";
+import { applySplitFactor, isCashBearingAccount, splitFactorOf } from "../lib/domain";
 import { round, roundEur } from "../lib/money";
 
 import type { Tx } from "../db/client";
@@ -19,6 +19,9 @@ export type LedgerTrade = {
   feesAmount: number;
   feesAmountEur: number;
   fxRateToEur: number;
+  /** Solo filas "split": factor N:M de canje (ver applySplitFactor). */
+  splitNumerator?: number | null;
+  splitDenominator?: number | null;
 };
 
 export type LedgerFold = {
@@ -63,6 +66,17 @@ export function foldLedger(rows: LedgerTrade[]): LedgerFold {
       totalCostNative -= totalCostNative * fraction;
       totalCostEur -= totalCostEur * fraction;
       qty -= row.quantity;
+    } else if (row.transactionType === "split") {
+      // Split / contra-split N:M: solo cambia el número de unidades. El pool
+      // de coste queda intacto — no hay adquisición ni transmisión — y el
+      // coste medio se re-escala solo al dividir coste/qty.
+      const factor = splitFactorOf({
+        splitNumerator: row.splitNumerator ?? null,
+        splitDenominator: row.splitDenominator ?? null,
+      });
+      if (factor && qty > 0) {
+        qty = applySplitFactor(qty, factor.numerator, factor.denominator);
+      }
     }
     // dividend / fee: do not affect position quantity or cost basis here;
     // cash impact is captured on the paired cash_movement.

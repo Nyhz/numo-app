@@ -119,19 +119,30 @@ export default async function TransactionsPage({
               key: "qty",
               header: "Cant.",
               align: "right",
-              cell: (r) => (
-                <span className="tabular-nums">{r.quantity.toFixed(4)}</span>
-              ),
+              cell: (r) =>
+                r.transactionType === "split" ? (
+                  <span
+                    className="tabular-nums"
+                    title="Canje: nuevas por antiguas"
+                  >
+                    {r.splitNumerator ?? "?"}:{r.splitDenominator ?? "?"}
+                  </span>
+                ) : (
+                  <span className="tabular-nums">{r.quantity.toFixed(4)}</span>
+                ),
             },
             {
               key: "price",
               header: "Precio",
               align: "right",
-              cell: (r) => (
-                <SensitiveValue className="tabular-nums">
-                  {r.unitPrice.toFixed(4)}
-                </SensitiveValue>
-              ),
+              cell: (r) =>
+                r.transactionType === "split" ? (
+                  <span className="text-muted-foreground">—</span>
+                ) : (
+                  <SensitiveValue className="tabular-nums">
+                    {r.unitPrice.toFixed(4)}
+                  </SensitiveValue>
+                ),
             },
             {
               key: "fx",

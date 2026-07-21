@@ -1,7 +1,8 @@
 import { asc, eq, inArray } from "drizzle-orm";
 import { ulid } from "ulid";
 import type { DbOrTx } from "../../db/client";
-import { roundEur } from "../../lib/money";
+import { applySplitFactor, splitFactorOf } from "../../lib/domain";
+import { round, roundEur } from "../../lib/money";
 import {
   assetTransactions,
   assets,
@@ -141,6 +142,33 @@ export function recomputeLotsForAsset(tx: DbOrTx, assetId: string): void {
       };
       open.push(lot);
       lotByOriginTxn.set(row.id, lot);
+      continue;
+    }
+
+    // split / contra-split N:M: fiscalmente neutro (canje de valores
+    // homogéneos, no hay alteración patrimonial). Cada lote abierto escala su
+    // remainingQty por el factor; acquiredAt, grossCostEur, feesEur y la
+    // pérdida diferida integrada quedan intactos — la base y la antigüedad
+    // FIFO sobreviven al canje. originalQty se conserva en unidades de la
+    // fecha de adquisición (es un dato histórico, no un saldo vivo).
+    if (row.transactionType === "split") {
+      const factor = splitFactorOf(row);
+      if (factor) {
+        for (const lot of open) {
+          lot.remainingQty = round(
+            applySplitFactor(lot.remainingQty, factor.numerator, factor.denominator),
+            10,
+          );
+          tx.update(taxLots)
+            .set({ remainingQty: lot.remainingQty })
+            .where(eq(taxLots.id, lot.id))
+            .run();
+        }
+      }
+      // Nota antiaplicación: los absorbentes de una venta a pérdida se miden
+      // en unidades de su propia fecha; un split entre venta y recompra
+      // mezclaría épocas. Régimen «nunca recompra» vigente (test candado) —
+      // si algún día se levanta, convertir unidades aquí.
       continue;
     }
 
