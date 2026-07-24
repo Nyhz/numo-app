@@ -25,6 +25,9 @@ export const mortgages = sqliteTable(
     firstPaymentDate: text("first_payment_date").notNull(), // ISO yyyy-MM-dd
     spreadPct: real("spread_pct"),
     referenceIndex: text("reference_index"),
+    /** Total de intereses según la oferta/cuadro del banco — dato de
+     *  contraste para validar el cuadro derivado, nunca entra en cálculos. */
+    expectedTotalInterestEur: real("expected_total_interest_eur"),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },

@@ -10,7 +10,13 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import * as schema from "../../db/schema";
 import { auditEvents, mortgageEvents, mortgages, properties } from "../../db/schema";
 import type { DB } from "../../db/client";
-import { addMortgageEvent, addValuation, createProperty, deleteProperty } from "../realEstate";
+import {
+  addMortgageEvent,
+  addValuation,
+  createProperty,
+  deleteProperty,
+  setMortgageExpectedInterest,
+} from "../realEstate";
 
 function makeDb(): DB {
   const sqlite = new Database(":memory:");
@@ -91,6 +97,65 @@ describe("acciones real-estate", () => {
     );
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe("conflict");
+  });
+
+  it("addMortgageEvent payment_override: persiste amountEur como cuota", async () => {
+    const created = await createProperty(CANON_INPUT, db);
+    if (!created.ok) throw new Error("seed");
+    const mortgageId = created.data.mortgage!.id;
+    const res = await addMortgageEvent(
+      { type: "payment_override", mortgageId, eventDate: "2026-09-01", amountEur: 410, note: "primera cuota prorrateada" },
+      db,
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data).toMatchObject({
+      type: "payment_override",
+      amountEur: 410,
+      mode: null,
+      newRatePct: null,
+    });
+  });
+
+  it("addMortgageEvent payment_override: cuota que no cubre intereses ⇒ conflict amistoso", async () => {
+    const created = await createProperty(CANON_INPUT, db);
+    if (!created.ok) throw new Error("seed");
+    const mortgageId = created.data.mortgage!.id;
+    // Interés del primer mes = 150k × 2,5 %/12 = 312,50 € → 300 € nunca amortiza.
+    const res = await addMortgageEvent(
+      { type: "payment_override", mortgageId, eventDate: "2026-09-01", amountEur: 300 },
+      db,
+    );
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe("conflict");
+      expect(res.error.message).toMatch(/no cubre los intereses/);
+    }
+    expect(db.select().from(mortgageEvents).all()).toHaveLength(0);
+  });
+
+  it("setMortgageExpectedInterest: guarda, audita y admite borrado con null", async () => {
+    const created = await createProperty(
+      { ...CANON_INPUT, mortgage: { ...CANON_INPUT.mortgage, expectedTotalInterestEur: 51_878 } },
+      db,
+    );
+    if (!created.ok) throw new Error("seed");
+    expect(created.data.mortgage!.expectedTotalInterestEur).toBe(51_878);
+    const mortgageId = created.data.mortgage!.id;
+    const res = await setMortgageExpectedInterest(
+      { mortgageId, expectedTotalInterestEur: 52_000 },
+      db,
+    );
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.expectedTotalInterestEur).toBe(52_000);
+    const cleared = await setMortgageExpectedInterest(
+      { mortgageId, expectedTotalInterestEur: null },
+      db,
+    );
+    expect(cleared.ok).toBe(true);
+    if (cleared.ok) expect(cleared.data.expectedTotalInterestEur).toBeNull();
+    const audits = db.select().from(auditEvents).all();
+    expect(audits.filter((a) => a.entityType === "mortgage" && a.action === "update")).toHaveLength(2);
   });
 
   it("deleteProperty: cascade elimina hipoteca y eventos", async () => {

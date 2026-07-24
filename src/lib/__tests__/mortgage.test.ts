@@ -138,6 +138,104 @@ describe("buildSchedule — eventos", () => {
   });
 });
 
+describe("buildSchedule — payment_override", () => {
+  it("aplica a la cuota de su misma fecha y se hereda hacia delante", () => {
+    const rows = buildSchedule(CANON, [
+      { type: "payment_override", eventDate: "2026-09-01", paymentEur: 410 },
+    ]);
+    expect(rows[0]).toMatchObject({ date: "2026-09-01", paymentEur: 410, overridden: true });
+    // Interés del mes al TIN vigente; capital = cuota − interés.
+    expect(rows[0].interestEur).toBe(312.5);
+    expect(rows[0].principalEur).toBeCloseTo(97.5, 2);
+    // Herencia: la siguiente cuota mantiene 410 €.
+    expect(rows[1]).toMatchObject({ date: "2026-10-01", paymentEur: 410, overridden: true });
+  });
+
+  it("escenario Commander: 410 → 580 → TIN nuevo + 597 hasta el final", () => {
+    const rows = buildSchedule(CANON, [
+      { type: "payment_override", eventDate: "2026-09-01", paymentEur: 410 },
+      { type: "payment_override", eventDate: "2026-10-01", paymentEur: 580 },
+      { type: "rate_change", eventDate: "2027-09-01", newRatePct: 3.1 },
+      { type: "payment_override", eventDate: "2027-09-01", paymentEur: 597 },
+    ]);
+    const q1 = rows.find((r) => r.date === "2026-09-01")!;
+    const q2 = rows.find((r) => r.date === "2026-10-01")!;
+    const q12 = rows.find((r) => r.date === "2027-08-01")!;
+    const q13 = rows.find((r) => r.date === "2027-09-01")!;
+    const q14 = rows.find((r) => r.date === "2027-10-01")!;
+    expect(q1.paymentEur).toBe(410);
+    expect(q2.paymentEur).toBe(580);
+    expect(q12.paymentEur).toBe(580); // heredada todo el primer año
+    // Cuota del aniversario: importe del usuario; el rate_change co-fechado
+    // aplica DESPUÉS de esa cuota (semántica existente).
+    expect(q13).toMatchObject({ paymentEur: 597, ratePct: 2.5, overridden: true });
+    // Desde la siguiente: TIN nuevo, cuota del usuario intacta (no la pisa).
+    expect(q14).toMatchObject({ paymentEur: 597, ratePct: 3.1, overridden: true });
+    // El préstamo termina: última fila con pendiente 0 y capital cuadrado.
+    const last = rows[rows.length - 1];
+    expect(last.remainingEur).toBe(0);
+    const total = rows.reduce((s, r) => s + r.principalEur, 0);
+    expect(Math.round(total * 100) / 100).toBe(150_000);
+  });
+
+  it("cuotas forzadas por debajo de la anualidad alargan hasta el globo final", () => {
+    // 580 € < 672,93 € de anualidad ⇒ amortiza más lento; al agotar el plazo
+    // (mes 300) la última cuota absorbe el capital restante.
+    const rows = buildSchedule(CANON, [
+      { type: "payment_override", eventDate: "2026-09-01", paymentEur: 580 },
+    ]);
+    expect(rows).toHaveLength(300);
+    const last = rows[rows.length - 1];
+    expect(last.remainingEur).toBe(0);
+    expect(last.paymentEur).toBeGreaterThan(580);
+  });
+
+  it("cuotas forzadas por encima de la anualidad acaban antes del plazo", () => {
+    const rows = buildSchedule(CANON, [
+      { type: "payment_override", eventDate: "2026-09-01", paymentEur: 900 },
+    ]);
+    expect(rows.length).toBeLessThan(300);
+    expect(rows[rows.length - 1].remainingEur).toBe(0);
+  });
+
+  it("un rate_change SIN override activo sigue recalculando la anualidad", () => {
+    const rows = buildSchedule(CANON, [
+      { type: "rate_change", eventDate: "2028-09-15", newRatePct: 3.5 },
+    ]);
+    const after = rows.find((r) => r.date === "2028-10-01");
+    expect(after && after.paymentEur > 672.93).toBe(true);
+    expect(after?.overridden).toBeUndefined();
+  });
+
+  it("reduce_installment pisa el override (el banco recalcula la cuota)", () => {
+    const rows = buildSchedule(CANON, [
+      { type: "payment_override", eventDate: "2026-09-01", paymentEur: 800 },
+      { type: "early_repayment", eventDate: "2027-01-15", amountEur: 20_000, mode: "reduce_installment" },
+    ]);
+    const before = rows.find((r) => r.kind === "payment" && r.date === "2027-01-01")!;
+    const after = rows.find((r) => r.kind === "payment" && r.date === "2027-02-01")!;
+    expect(before).toMatchObject({ paymentEur: 800, overridden: true });
+    expect(after.paymentEur).toBeLessThan(672.93);
+    expect(after.overridden).toBeUndefined();
+  });
+
+  it("override que no cubre los intereses lanza", () => {
+    expect(() =>
+      buildSchedule(CANON, [
+        { type: "payment_override", eventDate: "2026-09-01", paymentEur: 300 },
+      ]),
+    ).toThrow(/no cubre los intereses/);
+  });
+
+  it("dos overrides el mismo día: gana el último", () => {
+    const rows = buildSchedule(CANON, [
+      { type: "payment_override", eventDate: "2026-09-01", paymentEur: 700 },
+      { type: "payment_override", eventDate: "2026-09-01", paymentEur: 710 },
+    ]);
+    expect(rows[0].paymentEur).toBe(710);
+  });
+});
+
 describe("valoraciones y equity", () => {
   const rows = buildSchedule(CANON);
   const vals = [

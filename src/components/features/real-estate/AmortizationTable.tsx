@@ -39,7 +39,16 @@ export function AmortizationTable({ summary }: { summary: PropertySummary }) {
       key: "payment",
       header: "Cuota",
       align: "right",
-      cell: (r) => <SensitiveValue>{formatEur(r.paymentEur)}</SensitiveValue>,
+      cell: (r) => (
+        <span className="inline-flex items-center gap-1.5">
+          {r.overridden ? (
+            <Badge variant="neutral" title="Cuota fijada manualmente (recibo real)">
+              ajustada
+            </Badge>
+          ) : null}
+          <SensitiveValue>{formatEur(r.paymentEur)}</SensitiveValue>
+        </span>
+      ),
     },
     {
       key: "interest",

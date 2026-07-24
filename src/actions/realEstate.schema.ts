@@ -12,6 +12,8 @@ export const mortgageInputSchema = z.object({
   firstPaymentDate: isoDate,
   spreadPct: z.number().min(0).max(15).nullish(),
   referenceIndex: z.string().trim().max(40).nullish(),
+  /** Total de intereses según la oferta del banco (dato de contraste). */
+  expectedTotalInterestEur: z.number().min(0).max(100_000_000).nullish(),
 });
 
 export const createPropertySchema = z.object({
@@ -53,4 +55,17 @@ export const addMortgageEventSchema = z.discriminatedUnion("type", [
     newRatePct: z.number().min(0).max(30),
     note: z.string().trim().max(200).nullish(),
   }),
+  z.object({
+    type: z.literal("payment_override"),
+    mortgageId: z.string().min(1),
+    eventDate: isoDate,
+    /** Nueva cuota mensual (recibo real del banco). */
+    amountEur: z.number().positive().max(1_000_000),
+    note: z.string().trim().max(200).nullish(),
+  }),
 ]);
+
+export const setMortgageExpectedInterestSchema = z.object({
+  mortgageId: z.string().min(1),
+  expectedTotalInterestEur: z.number().min(0).max(100_000_000).nullable(),
+});

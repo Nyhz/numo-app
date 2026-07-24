@@ -2,7 +2,11 @@ import { index, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { createdAtCol, idCol } from "./_shared";
 import { mortgages } from "./mortgages";
 
-export const MORTGAGE_EVENT_TYPES = ["early_repayment", "rate_change"] as const;
+export const MORTGAGE_EVENT_TYPES = [
+  "early_repayment",
+  "rate_change",
+  "payment_override",
+] as const;
 export type MortgageEventType = (typeof MORTGAGE_EVENT_TYPES)[number];
 
 export const EARLY_REPAYMENT_MODES = ["reduce_term", "reduce_installment"] as const;
@@ -11,7 +15,9 @@ export type EarlyRepaymentMode = (typeof EARLY_REPAYMENT_MODES)[number];
 /**
  * Historial auditable de la hipoteca. Cada evento recalcula el cuadro
  * desde su fecha. early_repayment exige amountEur+mode; rate_change
- * exige newRatePct (revisión Euríbor / novación).
+ * exige newRatePct (revisión Euríbor / novación); payment_override
+ * (cuota real del recibo) reutiliza amountEur como nueva cuota mensual,
+ * heredada hacia delante hasta el próximo evento que recalcule.
  */
 export const mortgageEvents = sqliteTable(
   "mortgage_events",

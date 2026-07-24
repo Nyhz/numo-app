@@ -26,6 +26,7 @@ type FormState = {
   nominalRatePct: string;
   termYears: string;
   firstPaymentDate: string;
+  expectedTotalInterestEur: string;
 };
 
 const initial: FormState = {
@@ -42,6 +43,7 @@ const initial: FormState = {
   nominalRatePct: "",
   termYears: "",
   firstPaymentDate: "",
+  expectedTotalInterestEur: "",
 };
 
 const RATE_TYPE_LABELS: Record<FormState["rateType"], string> = {
@@ -107,6 +109,9 @@ export function CreatePropertyModal({
               nominalRatePct: num(form.nominalRatePct),
               termMonths,
               firstPaymentDate: form.firstPaymentDate,
+              expectedTotalInterestEur: form.expectedTotalInterestEur
+                ? num(form.expectedTotalInterestEur)
+                : null,
             }
           : null,
       });
@@ -262,6 +267,20 @@ export function CreatePropertyModal({
                 />
               </Field>
             </div>
+            <Field
+              label="Total intereses según el banco (€) (opcional)"
+              errors={fieldErrors["mortgage.expectedTotalInterestEur"]}
+            >
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className={inputClass}
+                value={form.expectedTotalInterestEur}
+                onChange={(e) => set("expectedTotalInterestEur", e.target.value)}
+                placeholder="Dato de la FEIN — valida el cuadro derivado"
+              />
+            </Field>
             {livePayment != null ? (
               <p className="text-sm text-muted-foreground">
                 Cuota estimada:{" "}

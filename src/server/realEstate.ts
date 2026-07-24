@@ -72,20 +72,28 @@ function toTerms(m: Mortgage): MortgageTerms {
 }
 
 function toScheduleEvents(rows: MortgageEvent[]): MortgageScheduleEvent[] {
-  return rows.map((e) =>
-    e.type === "early_repayment"
-      ? {
-          type: "early_repayment" as const,
-          eventDate: e.eventDate,
-          amountEur: e.amountEur ?? 0,
-          mode: e.mode ?? "reduce_installment",
-        }
-      : {
-          type: "rate_change" as const,
-          eventDate: e.eventDate,
-          newRatePct: e.newRatePct ?? 0,
-        },
-  );
+  return rows.map((e) => {
+    if (e.type === "early_repayment") {
+      return {
+        type: "early_repayment" as const,
+        eventDate: e.eventDate,
+        amountEur: e.amountEur ?? 0,
+        mode: e.mode ?? "reduce_installment",
+      };
+    }
+    if (e.type === "payment_override") {
+      return {
+        type: "payment_override" as const,
+        eventDate: e.eventDate,
+        paymentEur: e.amountEur ?? 0,
+      };
+    }
+    return {
+      type: "rate_change" as const,
+      eventDate: e.eventDate,
+      newRatePct: e.newRatePct ?? 0,
+    };
+  });
 }
 
 export async function getRealEstateOverview(

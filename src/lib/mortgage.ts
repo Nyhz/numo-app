@@ -19,7 +19,12 @@ export type MortgageScheduleEvent =
       amountEur: number;
       mode: "reduce_term" | "reduce_installment";
     }
-  | { type: "rate_change"; eventDate: string; newRatePct: number };
+  | { type: "rate_change"; eventDate: string; newRatePct: number }
+  /** Cuota forzada por el usuario (recibo real del banco): sustituye a la
+   *  anualidad desde la cuota de `eventDate` (incluida) y se hereda hacia
+   *  delante hasta el próximo evento que recalcule (otro override, un
+   *  rate_change o una amortización reduce_installment). */
+  | { type: "payment_override"; eventDate: string; paymentEur: number };
 
 export type ScheduleRow = {
   index: number;
@@ -32,6 +37,8 @@ export type ScheduleRow = {
   remainingEur: number;
   /** TIN vigente en esta fila */
   ratePct: number;
+  /** True cuando la cuota viene de un payment_override, no de la anualidad. */
+  overridden?: boolean;
 };
 
 export type ScheduleSummary = {
@@ -70,12 +77,23 @@ export function buildSchedule(
   terms: MortgageTerms,
   events: MortgageScheduleEvent[] = [],
 ): ScheduleRow[] {
-  const pending = [...events].sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+  // Orden: por fecha; a igualdad, los payment_override PRIMERO — aplican A la
+  // cuota de su fecha (segunda pasada del bucle), mientras que el resto de
+  // eventos co-fechados aplican después de ella. Si fueran detrás en la cola,
+  // el evento no-override co-fechado (que aún no toca procesar) los taparía.
+  const pending = [...events].sort((a, b) => {
+    const byDate = a.eventDate.localeCompare(b.eventDate);
+    if (byDate !== 0) return byDate;
+    return (a.type === "payment_override" ? 0 : 1) - (b.type === "payment_override" ? 0 : 1);
+  });
   const rows: ScheduleRow[] = [];
   let remaining = roundEur(terms.principalEur);
   let ratePct = terms.nominalRatePct;
   let monthsLeft = terms.termMonths;
   let paymentEur = annuityPayment(remaining, ratePct, monthsLeft);
+  // Cuota forzada vigente: sustituye a la anualidad hasta el próximo evento
+  // recalculador (rate_change / reduce_installment / otro override).
+  let overridden = false;
   let paymentNo = 0;
   let ev = 0;
   let index = 0;
@@ -83,14 +101,23 @@ export function buildSchedule(
   while (remaining > 0 && rows.length < MAX_ROWS) {
     const date = addMonthsIso(terms.firstPaymentDate, paymentNo);
 
-    // Eventos estrictamente anteriores a la cuota de este mes. Un evento
-    // fechado el mismo día de una cuota aplica DESPUÉS de esa cuota.
+    // Pasada 1 — eventos estrictamente anteriores a la cuota de este mes. Un
+    // evento fechado el mismo día de una cuota aplica DESPUÉS de esa cuota.
     while (ev < pending.length && pending[ev].eventDate < date) {
       const e = pending[ev];
       ev += 1;
+      if (e.type === "payment_override") {
+        paymentEur = roundEur(e.paymentEur);
+        overridden = true;
+        continue;
+      }
       if (e.type === "rate_change") {
         ratePct = e.newRatePct;
-        paymentEur = annuityPayment(remaining, ratePct, monthsLeft);
+        // Con cuota forzada por el usuario, la revisión de TIN NO la pisa:
+        // el TIN solo cambia el reparto interés/capital. La cuota real la
+        // dicta el recibo del banco que el usuario registró — si la revisión
+        // se la cambia, registrará el importe nuevo.
+        if (!overridden) paymentEur = annuityPayment(remaining, ratePct, monthsLeft);
         continue;
       }
       const amount = roundEur(Math.min(e.amountEur, remaining));
@@ -108,9 +135,26 @@ export function buildSchedule(
       });
       if (remaining === 0) return rows;
       if (e.mode === "reduce_installment") {
+        // El banco recalcula la cuota: la estimación de anualidad sustituye
+        // al override hasta que el usuario registre el recibo nuevo.
         paymentEur = annuityPayment(remaining, ratePct, monthsLeft);
+        overridden = false;
       }
       // reduce_term: misma cuota — el bucle termina antes por sí solo.
+    }
+
+    // Pasada 2 — overrides fechados EXACTAMENTE en la cuota de hoy: aplican a
+    // esta cuota («la cuota del día 5 fue de X €»). El sort los deja delante
+    // de cualquier otro evento co-fechado.
+    while (
+      ev < pending.length &&
+      pending[ev].eventDate === date &&
+      pending[ev].type === "payment_override"
+    ) {
+      const e = pending[ev] as Extract<MortgageScheduleEvent, { type: "payment_override" }>;
+      ev += 1;
+      paymentEur = roundEur(e.paymentEur);
+      overridden = true;
     }
 
     const interestEur = roundEur(remaining * (ratePct / 100 / 12));
@@ -129,6 +173,7 @@ export function buildSchedule(
       principalEur: principalPart,
       remainingEur: remaining,
       ratePct,
+      ...(overridden ? { overridden: true } : {}),
     });
     paymentNo += 1;
     monthsLeft -= 1;

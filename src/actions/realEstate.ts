@@ -15,15 +15,47 @@ import {
   type Property,
   type PropertyValuation,
 } from "../db/schema";
-import { buildSchedule, outstandingAt } from "../lib/mortgage";
+import {
+  buildSchedule,
+  outstandingAt,
+  type MortgageScheduleEvent,
+} from "../lib/mortgage";
 import { ACTOR, type ActionResult, revalidateRealEstate } from "./_shared";
 import {
   addMortgageEventSchema,
   addValuationSchema,
   createPropertySchema,
   deleteByIdSchema,
+  setMortgageExpectedInterestSchema,
   updatePropertySchema,
 } from "./realEstate.schema";
+
+/** Fila de mortgage_events → evento del motor. Un solo mapeo para las
+ *  pre-validaciones del action (espejo de toScheduleEvents en server/). */
+function toEngineEvents(rows: MortgageEvent[]): MortgageScheduleEvent[] {
+  return rows.map((e) => {
+    if (e.type === "early_repayment") {
+      return {
+        type: "early_repayment" as const,
+        eventDate: e.eventDate,
+        amountEur: e.amountEur ?? 0,
+        mode: e.mode ?? "reduce_installment",
+      };
+    }
+    if (e.type === "payment_override") {
+      return {
+        type: "payment_override" as const,
+        eventDate: e.eventDate,
+        paymentEur: e.amountEur ?? 0,
+      };
+    }
+    return {
+      type: "rate_change" as const,
+      eventDate: e.eventDate,
+      newRatePct: e.newRatePct ?? 0,
+    };
+  });
+}
 
 type Validation<T> = { ok: true; data: T } | { ok: false; error: ActionResult<never> };
 
@@ -117,6 +149,7 @@ export async function createProperty(
             firstPaymentDate: v.data.mortgage.firstPaymentDate,
             spreadPct: v.data.mortgage.spreadPct ?? null,
             referenceIndex: v.data.mortgage.referenceIndex ?? null,
+            expectedTotalInterestEur: v.data.mortgage.expectedTotalInterestEur ?? null,
             createdAt: now,
             updatedAt: now,
           })
@@ -288,46 +321,49 @@ export async function addMortgageEvent(
       error: { code: "conflict", message: "El evento no puede ser anterior a la primera cuota" },
     };
   }
+  const terms = {
+    principalEur: mortgage.principalEur,
+    nominalRatePct: mortgage.nominalRatePct,
+    termMonths: mortgage.termMonths,
+    firstPaymentDate: mortgage.firstPaymentDate,
+  };
   if (v.data.type === "early_repayment") {
     const existing = db
       .select()
       .from(mortgageEvents)
       .where(eq(mortgageEvents.mortgageId, mortgage.id))
       .all();
-    const schedule = buildSchedule(
-      {
-        principalEur: mortgage.principalEur,
-        nominalRatePct: mortgage.nominalRatePct,
-        termMonths: mortgage.termMonths,
-        firstPaymentDate: mortgage.firstPaymentDate,
-      },
-      existing.map((e) =>
-        e.type === "early_repayment"
-          ? {
-              type: "early_repayment" as const,
-              eventDate: e.eventDate,
-              amountEur: e.amountEur ?? 0,
-              mode: e.mode ?? "reduce_installment",
-            }
-          : { type: "rate_change" as const, eventDate: e.eventDate, newRatePct: e.newRatePct ?? 0 },
-      ),
-    );
-    const pending = outstandingAt(
-      {
-        principalEur: mortgage.principalEur,
-        nominalRatePct: mortgage.nominalRatePct,
-        termMonths: mortgage.termMonths,
-        firstPaymentDate: mortgage.firstPaymentDate,
-      },
-      schedule,
-      v.data.eventDate,
-    );
+    const schedule = buildSchedule(terms, toEngineEvents(existing));
+    const pending = outstandingAt(terms, schedule, v.data.eventDate);
     if (v.data.amountEur >= pending) {
       return {
         ok: false,
         error: {
           code: "conflict",
           message: `La amortización (${v.data.amountEur} €) no puede igualar o superar el capital pendiente (${pending} €)`,
+        },
+      };
+    }
+  }
+  if (v.data.type === "payment_override") {
+    // Pre-validación amistosa: si la cuota forzada no cubre los intereses de
+    // algún mes, el motor lanza — mejor un error de formulario que un 500.
+    const existing = db
+      .select()
+      .from(mortgageEvents)
+      .where(eq(mortgageEvents.mortgageId, mortgage.id))
+      .all();
+    try {
+      buildSchedule(terms, [
+        ...toEngineEvents(existing),
+        { type: "payment_override", eventDate: v.data.eventDate, paymentEur: v.data.amountEur },
+      ]);
+    } catch {
+      return {
+        ok: false,
+        error: {
+          code: "conflict",
+          message: `La cuota (${v.data.amountEur} €) no cubre los intereses del mes — el préstamo nunca amortizaría`,
         },
       };
     }
@@ -341,7 +377,8 @@ export async function addMortgageEvent(
           mortgageId: v.data.mortgageId,
           eventDate: v.data.eventDate,
           type: v.data.type,
-          amountEur: v.data.type === "early_repayment" ? v.data.amountEur : null,
+          // payment_override reutiliza amountEur como nueva cuota mensual.
+          amountEur: v.data.type !== "rate_change" ? v.data.amountEur : null,
           mode: v.data.type === "early_repayment" ? v.data.mode : null,
           newRatePct: v.data.type === "rate_change" ? v.data.newRatePct : null,
           note: v.data.note ?? null,
@@ -382,6 +419,41 @@ export async function deleteMortgageEvent(
     });
     revalidateRealEstate();
     return { ok: true, data: { id: v.data.id } };
+  } catch (err) {
+    return dbError(err);
+  }
+}
+
+/** Registra (o borra, con null) el total de intereses de la oferta del banco —
+ *  dato de contraste que la tarjeta compara con el cuadro derivado. */
+export async function setMortgageExpectedInterest(
+  input: unknown,
+  db: DB = defaultDb,
+): Promise<ActionResult<Mortgage>> {
+  const v = validate(setMortgageExpectedInterestSchema, input);
+  if (!v.ok) return v.error;
+  const now = Date.now();
+  const previous = db
+    .select()
+    .from(mortgages)
+    .where(eq(mortgages.id, v.data.mortgageId))
+    .get();
+  if (!previous) {
+    return { ok: false, error: { code: "not_found", message: "hipoteca no encontrada" } };
+  }
+  try {
+    const updated = db.transaction((tx) => {
+      tx.update(mortgages)
+        .set({ expectedTotalInterestEur: v.data.expectedTotalInterestEur, updatedAt: now })
+        .where(eq(mortgages.id, v.data.mortgageId))
+        .run();
+      const row = tx.select().from(mortgages).where(eq(mortgages.id, v.data.mortgageId)).get();
+      if (!row) throw new Error("mortgage update vanished");
+      audit(tx, "mortgage", v.data.mortgageId, "update", previous, row, now);
+      return row;
+    });
+    revalidateRealEstate();
+    return { ok: true, data: updated };
   } catch (err) {
     return dbError(err);
   }

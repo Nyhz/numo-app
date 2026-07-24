@@ -1,0 +1,1 @@
+ALTER TABLE `mortgages` ADD `expected_total_interest_eur` real;
