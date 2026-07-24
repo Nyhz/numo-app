@@ -11,9 +11,12 @@ import { GainsLotDetail } from "./GainsLotDetail";
 type Props = {
   sales: SaleReportRow[];
   excludedSales?: TaxReport["excludedSales"];
+  /** Nota bajo el título. El default apunta a la tabla Declaración del
+   *  ejercicio — el detalle de activo pasa la suya. */
+  hint?: string;
 };
 
-export function GainsTable({ sales, excludedSales }: Props) {
+export function GainsTable({ sales, excludedSales, hint }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -39,8 +42,8 @@ export function GainsTable({ sales, excludedSales }: Props) {
   return (
     <Card title={`Detalle por venta (${sales.length})`}>
       <p className="px-4 pb-2 text-xs text-muted-foreground">
-        Una fila por venta, con sus lotes FIFO desplegables. Para transcribir a
-        Rentanet usa la tabla Declaración, arriba.
+        {hint ??
+          "Una fila por venta, con sus lotes FIFO desplegables. Para transcribir a Rentanet usa la tabla Declaración, arriba."}
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

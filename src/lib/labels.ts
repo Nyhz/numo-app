@@ -95,6 +95,22 @@ export function assetTypeLabel(type: string): string {
   return ASSET_TYPE_LABELS[type] ?? type;
 }
 
+/** Clase fiscal (`assets.assetClassTax`) — determina ventana antiaplicación
+ *  y tratamiento en el informe. Valores de `AssetClassTax` (tax/classification). */
+export const ASSET_CLASS_TAX_LABELS: Record<string, string> = {
+  listed_security: "Valor cotizado",
+  unlisted_security: "Valor no cotizado",
+  fund: "Fondo",
+  etf: "ETF",
+  crypto: "Cripto",
+  bond: "Bono",
+  other: "Otra clase",
+};
+
+export function assetClassTaxLabel(value: string): string {
+  return ASSET_CLASS_TAX_LABELS[value] ?? value;
+}
+
 /** Categoría de bien en el extranjero (bloque M720/M721). */
 export const M720_CATEGORY_LABELS: Record<string, string> = {
   "broker-securities": "Valores",

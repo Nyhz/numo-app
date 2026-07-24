@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ulid } from "ulid";
 import * as schema from "../../db/schema";
 import type { DB } from "../../db/client";
-import { getSectorAllocation } from "../sectors";
+import { getSectorAllocation, getSectorWeightingsForAsset } from "../sectors";
 
 function makeDb(): DB {
   const sqlite = new Database(":memory:");
@@ -178,5 +178,33 @@ describe("getSectorAllocation", () => {
     seedSector(db, b, "energy", 1, 9000);
     const result = await getSectorAllocation(db);
     expect(result.asOf).toBe(9000);
+  });
+});
+
+describe("getSectorWeightingsForAsset", () => {
+  let db: DB;
+
+  beforeEach(() => {
+    db = makeDb();
+  });
+
+  it("devuelve slices ordenadas por peso desc con asOf más reciente", async () => {
+    const etf = seedAsset(db, "World", "etf");
+    seedSector(db, etf, "technology", 0.3, 2000);
+    seedSector(db, etf, "financial_services", 0.5, 5000);
+    seedSector(db, etf, "energy", 0.2, 1000);
+    const result = await getSectorWeightingsForAsset(etf, db);
+    expect(result.slices.map((s) => s.label)).toEqual([
+      "financial_services", "technology", "energy",
+    ]);
+    expect(result.slices[0].weight).toBeCloseTo(0.5);
+    expect(result.asOf).toBe(5000);
+  });
+
+  it("activo sin composición → vacío", async () => {
+    const stock = seedAsset(db, "Solo", "stock");
+    const result = await getSectorWeightingsForAsset(stock, db);
+    expect(result.slices).toEqual([]);
+    expect(result.asOf).toBeNull();
   });
 });

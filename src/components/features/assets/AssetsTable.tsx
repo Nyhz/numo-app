@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { MoreHorizontal } from "lucide-react";
 import { Badge } from "@/src/components/ui/Badge";
@@ -14,36 +15,11 @@ import { deleteAsset } from "@/src/actions/deleteAsset";
 import type { Asset } from "@/src/db/schema";
 import type { AssetListRow } from "@/src/server/assets";
 import { EditAssetModal } from "./EditAssetModal";
+import { FreshnessBadge } from "./FreshnessBadge";
 import { SetManualPriceModal } from "./SetManualPriceModal";
 import { WatchlistStar } from "./WatchlistStar";
 
 type ModalKind = "edit" | "price" | "deactivate" | "delete" | null;
-
-function FreshnessCell({ row }: { row: AssetListRow }) {
-  const f = row.freshness;
-  if (!f) {
-    return <span className="text-xs text-muted-foreground">Sin precio</span>;
-  }
-  const when = new Date(f.pricedAt).toISOString().slice(0, 10);
-  const KNOWN: Record<string, { label: string; variant: "success" | "neutral" | "warning" }> = {
-    yahoo: { label: "Yahoo", variant: "success" },
-    "yahoo-backfill": { label: "Yahoo", variant: "success" },
-    coingecko: { label: "CoinGecko", variant: "success" },
-    ft: { label: "Financial Times", variant: "success" },
-    tradingview: { label: "TradingView", variant: "success" },
-    rebuilt: { label: "Reconstruido", variant: "neutral" },
-    manual: { label: "Manual", variant: "neutral" },
-  };
-  const known = KNOWN[f.source];
-  const label = known?.label ?? f.source;
-  const variant = known?.variant ?? "warning";
-  return (
-    <span className="inline-flex items-center gap-2">
-      <Badge variant={variant}>{label}</Badge>
-      <span className="text-xs text-muted-foreground">{when}</span>
-    </span>
-  );
-}
 
 export function AssetsTable({ rows }: { rows: AssetListRow[] }) {
   const [active, setActive] = React.useState<Asset | null>(null);
@@ -93,10 +69,13 @@ export function AssetsTable({ rows }: { rows: AssetListRow[] }) {
             key: "name",
             header: "Nombre",
             cell: (r) => (
-              <span className="flex items-center gap-2">
+              <Link
+                href={`/assets/${r.id}`}
+                className="flex items-center gap-2 hover:underline"
+              >
                 <AssetLogo name={r.name} logoUrl={r.logoUrl} size={20} />
                 {r.name}
-              </span>
+              </Link>
             ),
           },
           {
@@ -118,7 +97,7 @@ export function AssetsTable({ rows }: { rows: AssetListRow[] }) {
           {
             key: "price",
             header: "Precio",
-            cell: (r) => <FreshnessCell row={r} />,
+            cell: (r) => <FreshnessBadge freshness={r.freshness} />,
           },
           {
             key: "active",

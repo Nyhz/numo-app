@@ -37,6 +37,8 @@ export function revalidateTradeMutation(accountId: string): void {
     revalidatePath(p);
   }
   revalidatePath(`/accounts/${accountId}`);
+  // Detalle de activo: serie, lotes, KPIs y ledger filtrado derivan del trade.
+  revalidatePath("/assets/[id]", "page");
 }
 
 export function revalidateCashMovement(accountId: string): void {
@@ -61,6 +63,7 @@ export function revalidateAssetMetadata(): void {
   for (const p of ["/", "/assets", "/audit", "/taxes"]) {
     revalidatePath(p);
   }
+  revalidatePath("/assets/[id]", "page");
 }
 
 // Watchlist membership, its alerts, and fired alert-events all surface on the
@@ -70,6 +73,8 @@ export function revalidateWatchlist(): void {
   for (const p of ["/", "/watchlist", "/assets", "/audit"]) {
     revalidatePath(p);
   }
+  // La estrella también vive en la cabecera del detalle de activo.
+  revalidatePath("/assets/[id]", "page");
 }
 
 export function revalidateAccountMutation(): void {

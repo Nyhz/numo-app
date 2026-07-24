@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ulid } from "ulid";
 import * as schema from "../../db/schema";
 import type { DB } from "../../db/client";
-import { getCountryAllocation } from "../countries";
+import { getCountryAllocation, getCountryWeightingsForAsset } from "../countries";
 
 function makeDb(): DB {
   const sqlite = new Database(":memory:");
@@ -205,5 +205,35 @@ describe("getCountryAllocation", () => {
     seedCountry(db, b, "germany", 1, 9000);
     const result = await getCountryAllocation(db);
     expect(result.asOf).toBe(9000);
+  });
+});
+
+describe("getCountryWeightingsForAsset", () => {
+  let db: DB;
+
+  beforeEach(() => {
+    db = makeDb();
+  });
+
+  it("pliega países a regiones, ordena desc y hunde «other» al final", async () => {
+    const etf = seedAsset(db, "World", "etf");
+    seedCountry(db, etf, "united_states", 0.5, 3000);
+    seedCountry(db, etf, "canada", 0.1, 3000);
+    seedCountry(db, etf, "germany", 0.25, 4000);
+    seedCountry(db, etf, "atlantis", 0.15, 2000); // sin región → other
+    const result = await getCountryWeightingsForAsset(etf, db);
+    expect(result.slices.map((s) => s.label)).toEqual([
+      "north_america", "europe", "other",
+    ]);
+    expect(result.slices[0].weight).toBeCloseTo(0.6); // US + Canadá
+    expect(result.slices[1].weight).toBeCloseTo(0.25);
+    expect(result.asOf).toBe(4000);
+  });
+
+  it("activo sin composición → vacío", async () => {
+    const stock = seedAsset(db, "Solo", "stock");
+    const result = await getCountryWeightingsForAsset(stock, db);
+    expect(result.slices).toEqual([]);
+    expect(result.asOf).toBeNull();
   });
 });

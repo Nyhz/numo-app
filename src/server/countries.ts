@@ -1,9 +1,10 @@
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
 import { assetCountryWeightings, type AssetCountryWeighting } from "../db/schema";
 import { COMMODITY_SUBTYPE } from "../lib/sectors";
 import { OTHER_REGION, countryRegion } from "../lib/countries";
 import { listPositions } from "./positions";
+import { EMPTY_ASSET_WEIGHTINGS, type AssetWeightings } from "./sectors";
 
 export type RegionSlice = {
   region: string;
@@ -20,6 +21,38 @@ export type RegionAllocation = {
   /** Newest country-data fetch timestamp across contributing assets. */
   asOf: number | null;
 };
+
+/** Composición geográfica del propio activo, plegada a regiones (mismo mapa
+ *  continente que el donut del Extracto). Pesos 0..1 del proveedor; «Otros»
+ *  siempre al final. */
+export async function getCountryWeightingsForAsset(
+  assetId: string,
+  db: DB = defaultDb,
+): Promise<AssetWeightings> {
+  const rows = await db
+    .select()
+    .from(assetCountryWeightings)
+    .where(eq(assetCountryWeightings.assetId, assetId))
+    .all();
+  if (rows.length === 0) return EMPTY_ASSET_WEIGHTINGS;
+
+  const byRegion = new Map<string, number>();
+  let asOf: number | null = null;
+  for (const r of rows) {
+    const region = countryRegion(r.country);
+    byRegion.set(region, (byRegion.get(region) ?? 0) + r.weight);
+    asOf = asOf == null ? r.fetchedAt : Math.max(asOf, r.fetchedAt);
+  }
+  const slices = [...byRegion.entries()]
+    .map(([label, weight]) => ({ label, weight }))
+    .sort((a, b) => {
+      const ra = a.label === OTHER_REGION ? 1 : 0;
+      const rb = b.label === OTHER_REGION ? 1 : 0;
+      if (ra !== rb) return ra - rb;
+      return b.weight - a.weight;
+    });
+  return { slices, asOf };
+}
 
 const EMPTY: RegionAllocation = {
   slices: [],

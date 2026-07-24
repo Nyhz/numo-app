@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
 import { assetSectorWeightings, type AssetSectorWeighting } from "../db/schema";
 import {
@@ -24,6 +24,33 @@ export type SectorAllocation = {
   /** Newest sector-data fetch timestamp across contributing assets. */
   asOf: number | null;
 };
+
+/** Composición del propio activo (peso 0..1 del proveedor), sin ponderar por
+ *  cartera. Alimenta los mini-donuts de la página de detalle. */
+export type AssetWeightSlice = { label: string; weight: number };
+export type AssetWeightings = { slices: AssetWeightSlice[]; asOf: number | null };
+
+export const EMPTY_ASSET_WEIGHTINGS: AssetWeightings = { slices: [], asOf: null };
+
+export async function getSectorWeightingsForAsset(
+  assetId: string,
+  db: DB = defaultDb,
+): Promise<AssetWeightings> {
+  const rows = await db
+    .select()
+    .from(assetSectorWeightings)
+    .where(eq(assetSectorWeightings.assetId, assetId))
+    .orderBy(desc(assetSectorWeightings.weight))
+    .all();
+  if (rows.length === 0) return EMPTY_ASSET_WEIGHTINGS;
+  return {
+    slices: rows.map((r) => ({ label: r.sector, weight: r.weight })),
+    asOf: rows.reduce<number | null>(
+      (m, r) => (m == null ? r.fetchedAt : Math.max(m, r.fetchedAt)),
+      null,
+    ),
+  };
+}
 
 const EMPTY: SectorAllocation = {
   slices: [],

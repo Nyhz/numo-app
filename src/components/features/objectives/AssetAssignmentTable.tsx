@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card } from "@/src/components/ui/Card";
 import { DataTable } from "@/src/components/ui/DataTable";
@@ -86,12 +87,15 @@ export function AssetAssignmentTable({
               key: "asset",
               header: "Activo",
               cell: (a) => (
-                <div className="flex flex-col leading-tight">
+                <Link
+                  href={`/assets/${a.assetId}`}
+                  className="flex flex-col leading-tight hover:underline"
+                >
                   <span className="font-medium">{a.name}</span>
                   <span className="text-xs text-muted-foreground">
                     {a.symbol ?? "—"} · {assetTypeLabel(a.assetType)}
                   </span>
-                </div>
+                </Link>
               ),
             },
             {

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AssetLogo } from "@/src/components/ui/AssetLogo";
 import { DataTable } from "@/src/components/ui/DataTable";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
@@ -54,15 +55,20 @@ export function AssetBreakdownTable({
                 header: "Activo",
                 cell: (l) => (
                   <span className="flex min-w-0 items-center gap-2">
-                    <AssetLogo name={l.name} logoUrl={l.logoUrl} size={20} />
-                    <span className="flex min-w-0 flex-col leading-tight">
-                      <span className="truncate font-medium">{l.name}</span>
-                      {l.symbol && (
-                        <span className="truncate text-xs text-muted-foreground tabular-nums">
-                          {l.symbol}
-                        </span>
-                      )}
-                    </span>
+                    <Link
+                      href={`/assets/${l.assetId}`}
+                      className="flex min-w-0 items-center gap-2 hover:underline"
+                    >
+                      <AssetLogo name={l.name} logoUrl={l.logoUrl} size={20} />
+                      <span className="flex min-w-0 flex-col leading-tight">
+                        <span className="truncate font-medium">{l.name}</span>
+                        {l.symbol && (
+                          <span className="truncate text-xs text-muted-foreground tabular-nums">
+                            {l.symbol}
+                          </span>
+                        )}
+                      </span>
+                    </Link>
                     {l.valuationDate && pricesAsOf && l.valuationDate < pricesAsOf && (
                       <span
                         title={`Último precio: ${l.valuationDate}`}

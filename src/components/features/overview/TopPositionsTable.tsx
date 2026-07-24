@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AssetLogo } from "@/src/components/ui/AssetLogo";
 import { AssetTypeStripe } from "@/src/components/ui/AssetTypeBadge";
 import { Badge } from "@/src/components/ui/Badge";
@@ -40,7 +41,10 @@ export function TopPositionsTable({ rows }: { rows: TopPositionRow[] }) {
               const a = r.position.asset;
               const symbol = a.symbol ?? a.providerSymbol ?? "";
               return (
-                <div className="flex items-stretch gap-3">
+                <Link
+                  href={`/assets/${a.id}`}
+                  className="flex items-stretch gap-3 hover:underline"
+                >
                   <AssetTypeStripe type={a.assetType} />
                   <div className="flex items-center">
                     <AssetLogo name={a.name} logoUrl={a.logoUrl} size={24} />
@@ -58,7 +62,7 @@ export function TopPositionsTable({ rows }: { rows: TopPositionRow[] }) {
                       </Badge>
                     </span>
                   </div>
-                </div>
+                </Link>
               );
             },
           },

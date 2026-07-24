@@ -103,10 +103,13 @@ export default async function TransactionsPage({
                 const a = assetById.get(r.assetId);
                 if (!a) return r.assetId;
                 return (
-                  <span className="flex items-center gap-2">
+                  <Link
+                    href={`/assets/${a.id}`}
+                    className="flex items-center gap-2 hover:underline"
+                  >
                     <AssetLogo name={a.name} logoUrl={a.logoUrl} size={18} />
                     {a.symbol ?? a.name}
-                  </span>
+                  </Link>
                 );
               },
             },

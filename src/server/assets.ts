@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, max, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, max, or } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
 import {
   assetPositions,
@@ -90,6 +90,62 @@ export async function listAssetsWithFreshness(
     }
     return { ...asset, freshness };
   });
+}
+
+export type AssetPriceStatus = {
+  freshness: PriceFreshness;
+  /** Variación entre los dos últimos cierres diarios (% en divisa nativa —
+   *  nunca €, la divisa de cotización no está persistida). Null con precio
+   *  manual, sin histórico suficiente, o fondos FT (solo NAV diario, la UI
+   *  muestra «Último NAV» en su lugar). */
+  dayChange: { pct: number; lastDate: string; prevDate: string } | null;
+};
+
+/** Estado de precio de UN activo: mismo criterio manual/stale que
+ *  `listAssetsWithFreshness`, más la variación del último cierre. */
+export async function getAssetPriceStatus(
+  asset: Asset,
+  position: AssetPosition | null,
+  db: DB = defaultDb,
+): Promise<AssetPriceStatus> {
+  if (position?.manualPrice != null && position.manualPriceAsOf != null) {
+    return {
+      freshness: { pricedAt: position.manualPriceAsOf, source: "manual" },
+      dayChange: null,
+    };
+  }
+  const symbol = priceSymbolForAsset(asset);
+  if (!symbol) return { freshness: null, dayChange: null };
+
+  const last2 = await db
+    .select({
+      pricedAt: priceHistory.pricedAt,
+      pricedDateUtc: priceHistory.pricedDateUtc,
+      price: priceHistory.price,
+      source: priceHistory.source,
+    })
+    .from(priceHistory)
+    .where(eq(priceHistory.symbol, symbol))
+    .orderBy(desc(priceHistory.pricedDateUtc))
+    .limit(2)
+    .all();
+  if (last2.length === 0) return { freshness: null, dayChange: null };
+
+  const [last, prev] = last2;
+  const stale = Date.now() - last.pricedAt > STALE_MS;
+  const freshness: PriceFreshness = {
+    pricedAt: last.pricedAt,
+    source: stale ? "stale" : last.source,
+  };
+  const dayChange =
+    asset.priceSource !== "ft" && prev != null && prev.price > 0
+      ? {
+          pct: last.price / prev.price - 1,
+          lastDate: last.pricedDateUtc,
+          prevDate: prev.pricedDateUtc,
+        }
+      : null;
+  return { freshness, dayChange };
 }
 
 export async function listAssets(db: DB = defaultDb): Promise<Asset[]> {
