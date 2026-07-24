@@ -152,8 +152,12 @@ export function NetWorthChart({
         <p className="text-sm font-semibold text-foreground">
           <SensitiveValue>{formatEur(p.totalValue)}</SensitiveValue>
         </p>
+        {/* Etiquetada como TWR: sin ella se compara con la plusvalía latente
+            (foto estática, diluida por el DCA) y parece un bug — es la
+            rentabilidad ponderada por tiempo, misma métrica que los índices. */}
         <p className="text-xs text-muted-foreground">
-          ({formatIndexPercent(p.marketIndex)})
+          TWR <span className="tabular-nums">{formatIndexPercent(p.marketIndex)}</span> · pond.
+          por tiempo
         </p>
         {p.realEstateEquityEur > 0 && (
           <p className="mt-0.5 text-xs text-muted-foreground">
