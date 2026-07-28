@@ -4,6 +4,7 @@ import * as React from "react";
 import { Modal } from "@/src/components/ui/Modal";
 import { Button } from "@/src/components/ui/Button";
 import { createAssetWithdrawal } from "@/src/actions/createAssetWithdrawal";
+import { toast } from "@/src/lib/toast";
 
 type Props = {
   open: boolean;
@@ -76,6 +77,7 @@ export function CreateWithdrawalModal({ open, onOpenChange, accounts, assets }: 
     startTransition(async () => {
       const result = await createAssetWithdrawal(payload);
       if (result.ok) {
+        toast.success("Retirada registrada");
         handleOpenChange(false);
         return;
       }

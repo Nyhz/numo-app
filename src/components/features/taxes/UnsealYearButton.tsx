@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/src/components/ui/Button";
 import { ConfirmModal } from "@/src/components/ui/ConfirmModal";
 import { unsealYear } from "@/src/actions/unsealYear";
+import { toast } from "@/src/lib/toast";
 
 type Props = { year: number };
 
@@ -22,6 +23,7 @@ export function UnsealYearButton({ year }: Props) {
       // the error visible — a bare return lets the modal close and hide it.
       throw new Error(result.error.message);
     }
+    toast.success("Ejercicio desellado");
     router.refresh();
   }
 

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { activateBenchmark } from "@/src/actions/benchmarks";
+import { toast } from "@/src/lib/toast";
 import { BENCHMARKS, type BenchmarkKey } from "@/src/lib/benchmarks";
 import { cn } from "@/src/lib/cn";
 
@@ -27,6 +28,7 @@ export function BenchmarkToggles({ active }: { active: BenchmarkKey[] }) {
     (key: BenchmarkKey) => {
       setError(null);
       if (active.includes(key)) {
+        // Ocultar solo reescribe el query param — sin mutación de BD, sin toast.
         setKeys(active.filter((k) => k !== key));
         return;
       }
@@ -39,6 +41,7 @@ export function BenchmarkToggles({ active }: { active: BenchmarkKey[] }) {
           return;
         }
         setKeys([...active, key]);
+        toast.success("Benchmark activado");
       });
     },
     [active, setKeys],

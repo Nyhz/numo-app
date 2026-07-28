@@ -5,6 +5,7 @@ import { Modal } from "@/src/components/ui/Modal";
 import { Button } from "@/src/components/ui/Button";
 import { createAlert } from "@/src/actions/createAlert";
 import { updateAlert } from "@/src/actions/updateAlert";
+import { toast } from "@/src/lib/toast";
 import type { AlertKind, PriceAlert } from "@/src/db/schema";
 
 const KIND_LABELS: Record<AlertKind, string> = {
@@ -49,6 +50,7 @@ export function AlertModal({
         ? await updateAlert({ id: alert.id, kind, threshold: Number(threshold), notifyTelegram })
         : await createAlert({ assetId, kind, threshold: Number(threshold), notifyTelegram });
       if (result.ok) {
+        toast.success(editing ? "Alerta actualizada" : "Alerta creada");
         onOpenChange(false);
         return;
       }

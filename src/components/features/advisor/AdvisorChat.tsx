@@ -12,6 +12,7 @@ import {
   deleteConversation,
   renameConversation,
 } from "@/src/actions/advisorConversations";
+import { toastResult } from "@/src/lib/toast";
 import type { ConversationWithMessages } from "@/src/server/advisorConversations";
 
 type Msg = { role: "user" | "assistant"; content: string };
@@ -60,7 +61,7 @@ export function AdvisorChat({
     if (busy) return;
     setError(null);
     const res = await createConversation();
-    if (!res.ok) {
+    if (!toastResult(res, "Conversación creada", { silentError: true })) {
       setError(res.error.message);
       return;
     }
@@ -72,7 +73,7 @@ export function AdvisorChat({
     const prev = conversations.find((c) => c.id === id)?.title ?? null;
     patchConv(id, (c) => ({ ...c, title }));
     void renameConversation({ id, title }).then((res) => {
-      if (!res.ok) {
+      if (!toastResult(res, "Conversación renombrada", { silentError: true })) {
         patchConv(id, (c) => ({ ...c, title: prev }));
         setError(res.error.message);
       }
@@ -86,7 +87,9 @@ export function AdvisorChat({
       return next;
     });
     void deleteConversation({ id }).then((res) => {
-      if (!res.ok) setError(res.error.message);
+      if (!toastResult(res, "Conversación eliminada", { silentError: true })) {
+        setError(res.error.message);
+      }
     });
   }
 

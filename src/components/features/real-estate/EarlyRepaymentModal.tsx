@@ -8,6 +8,7 @@ import { Modal } from "@/src/components/ui/Modal";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur } from "@/src/lib/format";
 import { buildSchedule, nextPaymentAfter, outstandingAt, summarizeSchedule } from "@/src/lib/mortgage";
+import { toast } from "@/src/lib/toast";
 import type { PropertySummary } from "@/src/server/realEstate";
 import { scheduleEventsOf, termsOf } from "./mortgageClient";
 
@@ -74,6 +75,7 @@ export function EarlyRepaymentModal({
         note: note || null,
       });
       if (res.ok) {
+        toast.success("Amortización anticipada registrada");
         onOpenChange(false);
         setDate("");
         setAmount("");

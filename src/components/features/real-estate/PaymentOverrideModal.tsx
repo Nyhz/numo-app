@@ -8,6 +8,7 @@ import { Modal } from "@/src/components/ui/Modal";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur } from "@/src/lib/format";
 import { buildSchedule, summarizeSchedule } from "@/src/lib/mortgage";
+import { toast } from "@/src/lib/toast";
 import type { PropertySummary } from "@/src/server/realEstate";
 import { scheduleEventsOf, termsOf } from "./mortgageClient";
 
@@ -97,6 +98,7 @@ export function PaymentOverrideModal({
         note: note || null,
       });
       if (res.ok) {
+        toast.success("Cuota modificada");
         onOpenChange(false);
         setDate("");
         setAmount("");

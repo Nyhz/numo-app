@@ -11,6 +11,7 @@ import { DataTable } from "@/src/components/ui/DataTable";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { deleteCashMovement } from "@/src/actions/deleteCashMovement";
 import { deleteTransaction } from "@/src/actions/deleteTransaction";
+import { toast } from "@/src/lib/toast";
 import { formatDateTime, formatEur } from "@/src/lib/format";
 import { ledgerLabel } from "@/src/lib/labels";
 
@@ -69,6 +70,9 @@ export function AccountLedger({ rows, nextHref, prevHref }: AccountLedgerProps) 
       throw new Error(result.error.message);
     }
     setBanner(null);
+    toast.success(
+      target.kind === "transaction" ? "Transacción eliminada" : "Movimiento de caja eliminado",
+    );
   }
 
   return (

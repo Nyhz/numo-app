@@ -18,6 +18,7 @@ import {
   updateObjective,
 } from "@/src/actions/objectives";
 import { formatEur, formatPercent } from "@/src/lib/format";
+import { toast } from "@/src/lib/toast";
 import {
   OBJECTIVE_COLOR_VARS,
   firstFreeObjectiveColor,
@@ -90,6 +91,7 @@ export function ObjectivesPanel({
     startTransition(async () => {
       const result = await reorderObjectives({ ids: orderOverride.ids });
       if (!result.ok) setBanner(result.error.message);
+      else toast.success("Orden actualizado");
       router.refresh();
     });
   }
@@ -120,6 +122,7 @@ export function ObjectivesPanel({
         setBanner(result.error.message);
         return;
       }
+      toast.success(form.id ? "Tag actualizado" : "Tag creado");
       setBanner(null);
       setForm(null);
       router.refresh();
@@ -131,6 +134,7 @@ export function ObjectivesPanel({
     const result = await deleteObjective({ id: deleting.id });
     setDeleting(null);
     if (!result.ok) setBanner(result.error.message);
+    else toast.success("Tag eliminado");
     router.refresh();
   }
 
@@ -140,6 +144,7 @@ export function ObjectivesPanel({
       if (!result.ok) {
         setBanner(result.error.message);
       } else {
+        toast.success("Pesos del plan actualizados");
         setBanner(null);
       }
       router.refresh();

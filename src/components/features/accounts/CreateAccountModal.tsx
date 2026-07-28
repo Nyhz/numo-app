@@ -4,6 +4,7 @@ import * as React from "react";
 import { Modal } from "@/src/components/ui/Modal";
 import { Button } from "@/src/components/ui/Button";
 import { createAccount } from "@/src/actions/accounts";
+import { toast } from "@/src/lib/toast";
 import { ACCOUNT_TYPES } from "@/src/actions/_constants";
 import { ACCOUNT_COUNTRY_LABELS, accountTypeLabel } from "@/src/lib/labels";
 
@@ -64,6 +65,7 @@ export function CreateAccountModal({
     startTransition(async () => {
       const result = await createAccount(payload);
       if (result.ok) {
+        toast.success("Cuenta creada");
         reset();
         onOpenChange(false);
         return;

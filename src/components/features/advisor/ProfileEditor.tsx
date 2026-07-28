@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Button } from "@/src/components/ui/Button";
 import { saveAdvisorProfile } from "@/src/actions/saveAdvisorProfile";
+import { toastResult } from "@/src/lib/toast";
 
 export function ProfileEditor({
   initialContent,
@@ -19,6 +20,7 @@ export function ProfileEditor({
     setMsg(null);
     startTransition(async () => {
       const res = await saveAdvisorProfile({ content });
+      toastResult(res, "Perfil guardado", { silentError: true });
       setMsg(res.ok ? "Perfil guardado." : res.error.message);
     });
   }

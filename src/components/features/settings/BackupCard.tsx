@@ -7,6 +7,7 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { formatDateTime } from "@/src/lib/format";
 import { backupToDrive } from "@/src/actions/backupToDrive";
+import { toast } from "@/src/lib/toast";
 import type { BackupRunResult, BackupStatus } from "@/src/lib/backup";
 
 /** El label deriva de `getLatestBackupStatus()` calculado en el server en CADA
@@ -74,6 +75,7 @@ export function BackupCard({
         return;
       }
       setResult(res.data);
+      toast.success("Backup subido a Drive");
       // El label se recalcula del disco en el server, no de este resultado.
       router.refresh();
     } catch (err) {

@@ -12,6 +12,7 @@ import { AssetLogo } from "@/src/components/ui/AssetLogo";
 import { assetTypeLabel } from "@/src/components/ui/AssetTypeBadge";
 import { deactivateAsset } from "@/src/actions/deactivateAsset";
 import { deleteAsset } from "@/src/actions/deleteAsset";
+import { toast, toastResult } from "@/src/lib/toast";
 import type { Asset } from "@/src/db/schema";
 import type { AssetListRow } from "@/src/server/assets";
 import { EditAssetModal } from "./EditAssetModal";
@@ -38,7 +39,8 @@ export function AssetsTable({ rows }: { rows: AssetListRow[] }) {
 
   async function confirmDeactivate() {
     if (!active) return;
-    await deactivateAsset({ id: active.id });
+    const result = await deactivateAsset({ id: active.id });
+    toastResult(result, "Activo desactivado");
     closeModal();
   }
 
@@ -50,6 +52,7 @@ export function AssetsTable({ rows }: { rows: AssetListRow[] }) {
       setDeleteError(result.error.message);
       throw new Error(result.error.message);
     }
+    toast.success("Activo eliminado");
     closeModal();
   }
 

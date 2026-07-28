@@ -5,6 +5,7 @@ import * as React from "react";
 import { deleteProperty } from "@/src/actions/realEstate";
 import { Button } from "@/src/components/ui/Button";
 import { ConfirmModal } from "@/src/components/ui/ConfirmModal";
+import { toastResult } from "@/src/lib/toast";
 import type { PropertySummary } from "@/src/server/realEstate";
 import { AmortizationTable } from "./AmortizationTable";
 import { EquityChart } from "./EquityChart";
@@ -44,7 +45,7 @@ export function PropertySection({ summary }: { summary: PropertySummary }) {
         confirmLabel="Eliminar"
         onConfirm={async () => {
           const res = await deleteProperty({ id: summary.property.id });
-          if (res.ok) router.refresh();
+          if (toastResult(res, "Inmueble eliminado")) router.refresh();
         }}
       />
     </section>

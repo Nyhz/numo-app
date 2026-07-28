@@ -10,6 +10,7 @@ import { ConfirmModal } from "@/src/components/ui/ConfirmModal";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur } from "@/src/lib/format";
 import { roundEur } from "@/src/lib/money";
+import { toast, toastResult } from "@/src/lib/toast";
 import type { PropertySummary } from "@/src/server/realEstate";
 import { EarlyRepaymentModal } from "./EarlyRepaymentModal";
 import { PaymentOverrideModal } from "./PaymentOverrideModal";
@@ -159,7 +160,7 @@ export function MortgageCard({ summary }: { summary: PropertySummary }) {
         onConfirm={async () => {
           if (!deletingEvent) return;
           const res = await deleteMortgageEvent({ id: deletingEvent });
-          if (res.ok) {
+          if (toastResult(res, "Evento eliminado")) {
             setDeletingEvent(null);
             router.refresh();
           }
@@ -212,6 +213,7 @@ function ScheduleValidation({
         expectedTotalInterestEur: parsed,
       });
       if (res.ok) {
+        toast.success("Total de intereses del banco guardado");
         setEditing(false);
         setValue("");
         router.refresh();

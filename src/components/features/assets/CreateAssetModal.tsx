@@ -4,6 +4,7 @@ import * as React from "react";
 import { Modal } from "@/src/components/ui/Modal";
 import { Button } from "@/src/components/ui/Button";
 import { createAsset } from "@/src/actions/createAsset";
+import { toast } from "@/src/lib/toast";
 import { ASSET_TYPES } from "@/src/actions/_constants";
 import { PRICE_SOURCES, PRICE_SOURCE_LABELS } from "@/src/lib/domain";
 import { assetTypeLabel } from "@/src/components/ui/AssetTypeBadge";
@@ -88,6 +89,7 @@ export function CreateAssetModal({
     startTransition(async () => {
       const result = await createAsset(payload);
       if (result.ok) {
+        toast.success("Activo creado");
         reset();
         onOpenChange(false);
         return;

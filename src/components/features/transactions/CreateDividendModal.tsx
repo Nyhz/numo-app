@@ -7,6 +7,7 @@ import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { createDividend } from "@/src/actions/createDividend";
 import { previewFx, type FxPreview } from "@/src/actions/previewFx";
 import { formatEur } from "@/src/lib/format";
+import { toast } from "@/src/lib/toast";
 
 type Props = {
   open: boolean;
@@ -175,6 +176,7 @@ export function CreateDividendModal({ open, onOpenChange, accounts, assets }: Pr
     startTransition(async () => {
       const result = await createDividend(payload);
       if (result.ok) {
+        toast.success("Dividendo registrado");
         handleOpenChange(false);
         return;
       }

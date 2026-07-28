@@ -72,6 +72,7 @@ Position and cash-balance recomputation is part of the transaction that inserts 
 - **Loading states are skeletons, not spinners.** Use `StatesBlock` for empty / error / loading.
 - **Charts track the theme via CSS variables.** Never hardcode colours in Recharts props.
 - **Destructive actions require `ConfirmModal`.** Delete account, delete transaction, deactivate asset.
+- **Every user-initiated mutation fires a toast.** Success (and error, where no inline error UI exists) via `src/lib/toast.ts` — never import `sonner` directly, never put monetary amounts in a toast message (toasts live outside `<SensitiveValue>`).
 - Dark and light mode must both be verified before calling a UI task done.
 
 ---

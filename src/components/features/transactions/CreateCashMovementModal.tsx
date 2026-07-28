@@ -5,6 +5,7 @@ import { Modal } from "@/src/components/ui/Modal";
 import { Button } from "@/src/components/ui/Button";
 import { createCashMovement } from "@/src/actions/createCashMovement";
 import { previewFx, type FxPreview } from "@/src/actions/previewFx";
+import { toast } from "@/src/lib/toast";
 
 const MANUAL_CASH_MOVEMENT_KINDS = ["deposit", "withdrawal", "interest"] as const;
 const CASH_CURRENCIES = ["EUR", "USD", "GBP", "CHF"] as const;
@@ -164,6 +165,7 @@ export function CreateCashMovementModal({
     startTransition(async () => {
       const result = await createCashMovement(payload);
       if (result.ok) {
+        toast.success("Movimiento de caja registrado");
         handleOpenChange(false);
         return;
       }

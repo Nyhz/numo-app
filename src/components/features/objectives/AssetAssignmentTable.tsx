@@ -13,6 +13,7 @@ import {
 } from "@/src/actions/objectives";
 import { assetTypeLabel } from "@/src/components/ui/AssetTypeBadge";
 import { formatEur } from "@/src/lib/format";
+import { toast } from "@/src/lib/toast";
 import type { Objective } from "@/src/db/schema";
 import type { AssignableAsset } from "@/src/server/objectives";
 
@@ -59,6 +60,13 @@ export function AssetAssignmentTable({
       setBanner(result.error.message);
       return;
     }
+    toast.success(
+      value === EXCLUDE
+        ? "Activo excluido de objetivos"
+        : value === ""
+          ? "Objetivo quitado"
+          : "Objetivo asignado",
+    );
     router.refresh();
   }
 

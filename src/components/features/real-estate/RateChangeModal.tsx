@@ -8,6 +8,7 @@ import { Modal } from "@/src/components/ui/Modal";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur } from "@/src/lib/format";
 import { buildSchedule, nextPaymentAfter } from "@/src/lib/mortgage";
+import { toast } from "@/src/lib/toast";
 import type { PropertySummary } from "@/src/server/realEstate";
 import { scheduleEventsOf, termsOf } from "./mortgageClient";
 
@@ -61,6 +62,7 @@ export function RateChangeModal({
         note: note || null,
       });
       if (res.ok) {
+        toast.success("Revisión de tipo registrada");
         onOpenChange(false);
         setDate("");
         setRate("");

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/src/components/ui/Button";
 import { ConfirmModal } from "@/src/components/ui/ConfirmModal";
 import { sealYear } from "@/src/actions/sealYear";
+import { toast } from "@/src/lib/toast";
 
 type Props = { year: number; hasUnvalued?: boolean; hasUnknownCountry?: boolean };
 
@@ -28,6 +29,7 @@ export function SealYearButton({ year, hasUnvalued = false, hasUnknownCountry = 
       // the error visible — a bare return lets the modal close and hide it.
       throw new Error(result.error.message);
     }
+    toast.success("Ejercicio sellado");
     router.refresh();
   }
 

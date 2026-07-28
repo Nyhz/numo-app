@@ -8,6 +8,7 @@ import { Modal } from "@/src/components/ui/Modal";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur } from "@/src/lib/format";
 import { annuityPayment } from "@/src/lib/mortgage";
+import { toast } from "@/src/lib/toast";
 
 const inputClass =
   "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary";
@@ -116,6 +117,7 @@ export function CreatePropertyModal({
           : null,
       });
       if (result.ok) {
+        toast.success("Inmueble registrado");
         handleOpenChange(false);
         router.refresh();
         return;

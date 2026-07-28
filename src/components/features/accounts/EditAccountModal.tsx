@@ -4,6 +4,7 @@ import * as React from "react";
 import { Modal } from "@/src/components/ui/Modal";
 import { Button } from "@/src/components/ui/Button";
 import { updateAccount } from "@/src/actions/accounts";
+import { toast } from "@/src/lib/toast";
 import { ACCOUNT_COUNTRY_LABELS, accountTypeLabel } from "@/src/lib/labels";
 import type { Account } from "@/src/db/schema";
 
@@ -55,6 +56,7 @@ function EditAccountForm({
     startTransition(async () => {
       const result = await updateAccount(payload);
       if (result.ok) {
+        toast.success("Cuenta actualizada");
         onOpenChange(false);
         return;
       }

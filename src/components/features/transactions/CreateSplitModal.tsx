@@ -4,6 +4,7 @@ import * as React from "react";
 import { Modal } from "@/src/components/ui/Modal";
 import { Button } from "@/src/components/ui/Button";
 import { createAssetSplit } from "@/src/actions/createAssetSplit";
+import { toast } from "@/src/lib/toast";
 import { splitLabel } from "@/src/lib/domain";
 
 type Props = {
@@ -86,6 +87,7 @@ export function CreateSplitModal({ open, onOpenChange, accounts, assets }: Props
     startTransition(async () => {
       const result = await createAssetSplit(payload);
       if (result.ok) {
+        toast.success("Split registrado");
         handleOpenChange(false);
         return;
       }

@@ -4,6 +4,7 @@ import * as React from "react";
 import { Modal } from "@/src/components/ui/Modal";
 import { Button } from "@/src/components/ui/Button";
 import { createSwap } from "@/src/actions/createSwap";
+import { toast } from "@/src/lib/toast";
 
 type Props = {
   open: boolean;
@@ -82,6 +83,7 @@ export function CreateSwapModal({ open, onOpenChange, accounts, assets }: Props)
     startTransition(async () => {
       const result = await createSwap(payload);
       if (result.ok) {
+        toast.success("Permuta registrada");
         handleOpenChange(false);
         return;
       }

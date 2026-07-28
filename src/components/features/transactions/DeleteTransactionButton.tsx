@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/src/components/ui/Button";
 import { ConfirmModal } from "@/src/components/ui/ConfirmModal";
 import { deleteTransaction } from "@/src/actions/deleteTransaction";
+import { toast } from "@/src/lib/toast";
 
 export function DeleteTransactionButton({ id }: { id: string }) {
   const [open, setOpen] = React.useState(false);
@@ -17,6 +18,7 @@ export function DeleteTransactionButton({ id }: { id: string }) {
       setError(result.error.message);
       throw new Error(result.error.message);
     }
+    toast.success("Transacción eliminada");
   }
 
   return (

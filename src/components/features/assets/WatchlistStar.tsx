@@ -6,6 +6,7 @@ import { Button } from "@/src/components/ui/Button";
 import { cn } from "@/src/lib/cn";
 import { toggleAssetWatchlist } from "@/src/actions/toggleAssetWatchlist";
 import { refreshWatchlistQuote } from "@/src/actions/refreshWatchlistQuote";
+import { toastResult } from "@/src/lib/toast";
 
 // Star toggle for the Assets table. Optimistic: flips instantly, reconciles when
 // the server action resolves (and the revalidated page re-renders).
@@ -32,7 +33,7 @@ export function WatchlistStar({
     setOptimistic(next);
     startTransition(async () => {
       const res = await toggleAssetWatchlist({ id: assetId, watchlisted: next });
-      if (!res.ok) {
+      if (!toastResult(res, next ? "Añadido a la watchlist" : "Quitado de la watchlist")) {
         setOptimistic(!next); // revert on failure
         return;
       }

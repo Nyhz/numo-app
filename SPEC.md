@@ -101,6 +101,7 @@ Inline, no external UI package.
 - **StatesBlock** — empty / error / loading placeholders.
 - **SensitiveValue** — span that blurs when sensitive mode is active.
 - **ThemeToggle** — sun/moon icon button.
+- **Toaster** — sonner mounted once in the root layout, themed via the `data-theme` attribute (MutationObserver) and the card/border/foreground tokens. Every user-initiated DB mutation fires a toast on resolve through `src/lib/toast.ts` (`toastResult(result, msg)` for the standard case, `toast` re-export for bespoke ones like asset reactivation) — components never import `sonner` directly. Toast messages are Spanish, short, and NEVER contain monetary amounts (toasts render outside `<SensitiveValue>`). Forms that already show inline errors keep them and only toast success; UI-only state changes (hiding a benchmark, closing a modal) don't toast.
 
 ### Charts
 Recharts, styled via CSS variables so they track the theme. Tooltips minimal — value + date only. Loading state is a skeleton preloader, not a spinner.

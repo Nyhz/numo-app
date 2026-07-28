@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { setMarketIngest } from "@/src/actions/setMarketIngest";
+import { toastResult } from "@/src/lib/toast";
 
 export function MarketIngestToggle({ enabled }: { enabled: boolean }) {
   const [pending, startTransition] = React.useTransition();
@@ -11,7 +12,9 @@ export function MarketIngestToggle({ enabled }: { enabled: boolean }) {
   function toggle() {
     startTransition(async () => {
       const res = await setMarketIngest({ enabled: !enabled });
-      if (res.ok) router.refresh();
+      if (toastResult(res, !enabled ? "Scans de mercado activados" : "Scans de mercado desactivados")) {
+        router.refresh();
+      }
     });
   }
 

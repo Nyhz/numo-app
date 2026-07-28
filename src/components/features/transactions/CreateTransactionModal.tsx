@@ -7,6 +7,7 @@ import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { createTransaction } from "@/src/actions/createTransaction";
 import { previewFx, type FxPreview } from "@/src/actions/previewFx";
 import { formatEur } from "@/src/lib/format";
+import { toast } from "@/src/lib/toast";
 
 export type AccountOption = { id: string; name: string; currency: string };
 export type AssetOption = { id: string; name: string; symbol: string | null; currency: string };
@@ -176,6 +177,7 @@ export function CreateTransactionModal({
     startTransition(async () => {
       const result = await createTransaction(payload);
       if (result.ok) {
+        toast.success("Transacción registrada");
         handleOpenChange(false);
         return;
       }

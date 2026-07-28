@@ -8,6 +8,7 @@ import { ConfirmModal } from "@/src/components/ui/ConfirmModal";
 import { DataTable } from "@/src/components/ui/DataTable";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { deleteAccount } from "@/src/actions/deleteAccount";
+import { toast } from "@/src/lib/toast";
 import { formatEur, formatMoney } from "@/src/lib/format";
 import { accountCountryLabel, accountTypeLabel } from "@/src/lib/labels";
 import type { AccountWithTotals } from "@/src/server/accounts";
@@ -26,6 +27,7 @@ export function AccountsTable({ rows }: { rows: AccountWithTotals[] }) {
       setBanner(result.error.message);
     } else {
       setBanner(null);
+      toast.success("Cuenta eliminada");
     }
     setTarget(null);
   }

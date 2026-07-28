@@ -11,6 +11,7 @@ import {
   deleteDeclaredBaseline,
   setDeclaredBaseline,
 } from "@/src/actions/setDeclaredBaseline";
+import { toast } from "@/src/lib/toast";
 import type { DeclaredBaselineCategory, TaxDeclaredBaseline } from "@/src/db/schema";
 
 const CATEGORY_LABEL: Record<DeclaredBaselineCategory, string> = {
@@ -56,6 +57,7 @@ export function DeclaredBaselinesPanel({
       // the error visible — a bare return lets the modal close and hide it.
       throw new Error(result.error.message);
     }
+    toast.success("Base declarada eliminada");
     router.refresh();
   }
 
@@ -180,6 +182,7 @@ function BaselineFormModal({
     startTransition(async () => {
       const result = await setDeclaredBaseline(payload);
       if (result.ok) {
+        toast.success("Base declarada guardada");
         onOpenChange(false);
         router.refresh();
         return;

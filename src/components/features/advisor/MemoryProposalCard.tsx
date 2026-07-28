@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Button } from "@/src/components/ui/Button";
 import { applyMemoryProposal } from "@/src/actions/applyMemoryProposal";
+import { toast } from "@/src/lib/toast";
 
 export type Proposal = {
   id: string;
@@ -34,6 +35,9 @@ export function MemoryProposalCard({
     startTransition(async () => {
       const res = await applyMemoryProposal({ id: proposal.id, decision });
       if (res.ok) {
+        toast.success(
+          decision === "confirm" ? "Propuesta de memoria aplicada" : "Propuesta descartada",
+        );
         onResolved(proposal.id);
       } else {
         setError(res.error.message);

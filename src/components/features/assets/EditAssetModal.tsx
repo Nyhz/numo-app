@@ -4,6 +4,7 @@ import * as React from "react";
 import { Modal } from "@/src/components/ui/Modal";
 import { Button } from "@/src/components/ui/Button";
 import { updateAsset } from "@/src/actions/updateAsset";
+import { toast } from "@/src/lib/toast";
 import { ASSET_TYPES } from "@/src/actions/_constants";
 import { assetTypeLabel } from "@/src/components/ui/AssetTypeBadge";
 import type { Asset } from "@/src/db/schema";
@@ -86,9 +87,19 @@ export function EditAssetModal({
       isActive: form.isActive,
     };
 
+    const reactivating = !asset.isActive && form.isActive;
     startTransition(async () => {
       const result = await updateAsset(payload);
       if (result.ok) {
+        if (reactivating) {
+          // La reactivación dispara un gap-fill en segundo plano (precios+FX
+          // del periodo desactivado) — avisar de que el histórico está en camino.
+          toast.success("Activo reactivado", {
+            description: "Rellenando en segundo plano el histórico de precios del periodo desactivado…",
+          });
+        } else {
+          toast.success("Activo actualizado");
+        }
         onOpenChange(false);
         return;
       }

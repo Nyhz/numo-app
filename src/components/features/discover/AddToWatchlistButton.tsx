@@ -4,6 +4,7 @@ import * as React from "react";
 import { Check, Star } from "lucide-react";
 import { Button } from "@/src/components/ui/Button";
 import { addSymbolToWatchlist } from "@/src/actions/addSymbolToWatchlist";
+import { toast } from "@/src/lib/toast";
 
 // Materialises a discovered ticker into the watchlist (find-or-create asset +
 // flag + intraday quote). Flips to a confirmed state on success.
@@ -16,8 +17,10 @@ export function AddToWatchlistButton({ symbol, name }: { symbol: string; name: s
     setError(null);
     startTransition(async () => {
       const res = await addSymbolToWatchlist({ symbol, name });
-      if (res.ok) setAdded(true);
-      else setError(res.error.message);
+      if (res.ok) {
+        setAdded(true);
+        toast.success("Añadido a la watchlist");
+      } else setError(res.error.message);
     });
   }
 

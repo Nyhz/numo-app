@@ -6,6 +6,7 @@ import { Button } from "@/src/components/ui/Button";
 import { Card } from "@/src/components/ui/Card";
 import { ConfirmModal } from "@/src/components/ui/ConfirmModal";
 import { wipeApp } from "@/src/actions/wipeApp";
+import { toast } from "@/src/lib/toast";
 
 export function WipeAppCard() {
   const router = useRouter();
@@ -24,6 +25,7 @@ export function WipeAppCard() {
       setError(result.error.message);
       throw new Error(result.error.message);
     }
+    toast.success("Base de datos vaciada");
     setConfirmation("");
     router.refresh();
   }

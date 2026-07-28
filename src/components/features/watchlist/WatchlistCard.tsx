@@ -12,6 +12,7 @@ import { AssetTypeBadge } from "@/src/components/ui/AssetTypeBadge";
 import { PositionSparkline } from "@/src/components/features/overview/PositionSparkline";
 import { cn } from "@/src/lib/cn";
 import { deleteAlert } from "@/src/actions/deleteAlert";
+import { toastResult } from "@/src/lib/toast";
 import type { AlertKind, PriceAlert } from "@/src/db/schema";
 import type { WatchlistItem } from "@/src/server/watchlist";
 import { AlertModal } from "./AlertModal";
@@ -89,7 +90,8 @@ export function WatchlistCard({ item }: { item: WatchlistItem }) {
   }
   async function confirmDelete() {
     if (!toDelete) return;
-    await deleteAlert({ id: toDelete.id });
+    const result = await deleteAlert({ id: toDelete.id });
+    toastResult(result, "Alerta eliminada");
     setToDelete(null);
   }
 

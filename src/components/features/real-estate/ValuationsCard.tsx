@@ -9,6 +9,7 @@ import { ConfirmModal } from "@/src/components/ui/ConfirmModal";
 import { Modal } from "@/src/components/ui/Modal";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur } from "@/src/lib/format";
+import { toast, toastResult } from "@/src/lib/toast";
 import type { PropertySummary } from "@/src/server/realEstate";
 
 const inputClass =
@@ -35,6 +36,7 @@ export function ValuationsCard({ summary }: { summary: PropertySummary }) {
         note: note || null,
       });
       if (res.ok) {
+        toast.success("Tasación registrada");
         setAdding(false);
         setDate("");
         setValue("");
@@ -151,7 +153,7 @@ export function ValuationsCard({ summary }: { summary: PropertySummary }) {
         onConfirm={async () => {
           if (!deleting) return;
           const res = await deleteValuation({ id: deleting });
-          if (res.ok) {
+          if (toastResult(res, "Tasación eliminada")) {
             setDeleting(null);
             router.refresh();
           }

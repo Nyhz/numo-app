@@ -5,6 +5,7 @@ import { Modal } from "@/src/components/ui/Modal";
 import { Button } from "@/src/components/ui/Button";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { setManualPrice } from "@/src/actions/setManualPrice";
+import { toast } from "@/src/lib/toast";
 import type { Asset } from "@/src/db/schema";
 
 function today(): string {
@@ -43,6 +44,8 @@ export function SetManualPriceModal({
     startTransition(async () => {
       const result = await setManualPrice(payload);
       if (result.ok) {
+        // Sin importe en el mensaje — los toasts viven fuera de <SensitiveValue>.
+        toast.success("Precio manual guardado");
         onOpenChange(false);
         return;
       }

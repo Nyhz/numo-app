@@ -5,6 +5,7 @@ import Link from "next/link";
 import { X } from "lucide-react";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { acknowledgeAlertEvent } from "@/src/actions/acknowledgeAlertEvent";
+import { toastResult } from "@/src/lib/toast";
 import type { ActiveAlertEvent } from "@/src/server/alerts";
 
 const POLL_MS = 60_000;
@@ -63,7 +64,7 @@ export function AlertBanner({ initialEvents }: { initialEvents: ActiveAlertEvent
     setDismissing((prev) => new Set(prev).add(id));
     setEvents((prev) => prev.filter((e) => e.id !== id)); // optimistic
     const res = await acknowledgeAlertEvent({ id });
-    if (!res.ok) {
+    if (!toastResult(res, "Alerta confirmada")) {
       // Re-fetch to restore truth if the ack failed.
       try {
         const r = await fetch("/api/watchlist/alerts", { cache: "no-store" });
