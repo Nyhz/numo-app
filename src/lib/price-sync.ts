@@ -45,7 +45,7 @@ export type SyncSummary = {
   errors: SyncError[];
 };
 
-function providerFor(
+export function providerFor(
   asset: Pick<Asset, "assetType" | "priceSource">,
 ): PricingProviderName {
   // An explicit per-asset override wins over the type-based default — this is

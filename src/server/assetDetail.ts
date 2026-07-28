@@ -4,10 +4,18 @@
 // posición, lotes FIFO abiertos, la estimación «si vendieras hoy» (previsión
 // foral marginal) y el P&L realizado. Solo lecturas — cero mutaciones.
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, gt, lte } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
-import { assetTransactions, assetValuations, type Asset, type AssetPosition } from "../db/schema";
-import { roundEur } from "../lib/money";
+import {
+  assetTransactions,
+  assetValuations,
+  fxRates,
+  priceHistory,
+  type Asset,
+  type AssetPosition,
+} from "../db/schema";
+import { round, roundEur } from "../lib/money";
+import { priceSymbolForAsset } from "../lib/price-sync";
 import { toIsoDate } from "../lib/time";
 import { getAssetPriceStatus, getAssetWithPositions, type AssetPriceStatus } from "./assets";
 import { getCountryWeightingsForAsset } from "./countries";
@@ -48,6 +56,10 @@ export type AssetPricePoint = {
   unitPriceEur: number;
   /** Hasta dos marcadores (compra y/o venta) anclados a este punto. */
   markers?: AssetTradeMarker[];
+  /** True en la cola de mercado: puntos derivados de price_history en fechas
+   *  sin posición (activo vendido pero aún en seguimiento). Solo informativo
+   *  para el detalle — nunca alimenta valoraciones ni cómputos agregados. */
+  market?: boolean;
 };
 
 export type SellTodayEstimate = {
@@ -198,6 +210,68 @@ export function attachMarkers(
   return out;
 }
 
+/** Cola de mercado: puntos EUR desde price_history para fechas posteriores a
+ *  la última valoración con posición. Un activo `isActive` sigue cotizando en
+ *  el cron aunque su posición esté cerrada; esta cola hace visible ese
+ *  seguimiento en el detalle sin escribir valoraciones (que solo existen con
+ *  qty>0) ni afectar a ningún otro cómputo. Conversión EUR con la curva
+ *  fx_rates por asset.currency y carry-forward — misma convención que
+ *  `rebuildValuationsForAsset`. */
+async function loadMarketTail(
+  db: DB,
+  asset: Asset,
+  afterIso: string | null,
+  todayIso: string,
+  splits: SplitEvent[] | undefined,
+): Promise<AssetPricePoint[]> {
+  const symbol = priceSymbolForAsset(asset);
+  if (!symbol) return [];
+
+  const priceRows = await db
+    .select({ date: priceHistory.pricedDateUtc, price: priceHistory.price })
+    .from(priceHistory)
+    .where(
+      and(
+        eq(priceHistory.symbol, symbol),
+        afterIso ? gt(priceHistory.pricedDateUtc, afterIso) : undefined,
+        lte(priceHistory.pricedDateUtc, todayIso),
+      ),
+    )
+    .orderBy(asc(priceHistory.pricedDateUtc))
+    .all();
+  if (priceRows.length === 0) return [];
+
+  const currency = (asset.currency ?? "EUR").toUpperCase();
+  const fxCurve =
+    currency === "EUR"
+      ? null
+      : await db
+          .select({ date: fxRates.date, rateToEur: fxRates.rateToEur })
+          .from(fxRates)
+          .where(eq(fxRates.currency, currency))
+          .orderBy(asc(fxRates.date))
+          .all();
+
+  const out: AssetPricePoint[] = [];
+  let fxIdx = 0;
+  let lastFx: number | null = currency === "EUR" ? 1 : null;
+  for (const row of priceRows) {
+    if (fxCurve) {
+      while (fxIdx < fxCurve.length && fxCurve[fxIdx].date <= row.date) {
+        lastFx = fxCurve[fxIdx].rateToEur;
+        fxIdx++;
+      }
+    }
+    if (lastFx == null) continue;
+    out.push({
+      date: row.date,
+      unitPriceEur: round(row.price * lastFx, 6) * backAdjustFactor(splits, row.date),
+      market: true,
+    });
+  }
+  return out;
+}
+
 /** Estimación pura «si vendieras hoy»: ganancia foral por lote (coeficientes
  *  art. 45.Dos sobre la base restante) y cuota marginal contra la previsión
  *  real del ejercicio. */
@@ -275,7 +349,10 @@ export async function getAssetDetail(
           unitPriceEur: assetValuations.unitPriceEur,
         })
         .from(assetValuations)
-        .where(eq(assetValuations.assetId, assetId))
+        // qty>0: el motor de rebuild nunca escribe filas sin posición; las
+        // qty=0 que existan son legacy del cron pre-2026-07 y aquí pintarían
+        // como «en cartera» un tramo que ya no lo estaba.
+        .where(and(eq(assetValuations.assetId, assetId), gt(assetValuations.quantity, 0)))
         .orderBy(asc(assetValuations.valuationDate))
         .all(),
       db
@@ -306,8 +383,15 @@ export async function getAssetDetail(
   // Serie completa ajustada + marcadores; el filtro de rango va al final para
   // que el ancla «último punto ≤ fecha» no dependa de la ventana visible.
   const splits = loadSplitEvents(db, [assetId]).get(assetId);
+  const marketTail = await loadMarketTail(
+    db,
+    asset,
+    valuationRows.at(-1)?.valuationDate ?? null,
+    todayIso,
+    splits,
+  );
   const fullSeries = attachMarkers(
-    buildAdjustedSeries(valuationRows, splits),
+    [...buildAdjustedSeries(valuationRows, splits), ...marketTail],
     txRows,
     splits,
   );
@@ -316,12 +400,20 @@ export async function getAssetDetail(
 
   // KPIs de posición (misma semántica que listPositions/statement).
   const positionRow = allPositions.find((r) => r.position.assetId === assetId) ?? null;
-  const lastPrice = positionRow?.valuation
+  let lastPrice = positionRow?.valuation
     ? {
         unitPriceEur: positionRow.valuation.unitPriceEur,
         date: positionRow.valuation.valuationDate,
       }
     : null;
+  // Con cola de mercado más fresca que la última valoración (posición cerrada
+  // pero activo en seguimiento), el «último precio» es el de mercado. El
+  // factor de retro-ajuste de hoy es 1, así que el valor está en unidades
+  // actuales igual que el de la valoración.
+  const lastMarket = marketTail.at(-1);
+  if (lastMarket && (!lastPrice || lastMarket.date > lastPrice.date)) {
+    lastPrice = { unitPriceEur: lastMarket.unitPriceEur, date: lastMarket.date };
+  }
   const marketValueEur = state === "open" ? (positionRow?.valuationEur ?? null) : null;
   const averageCostEur =
     state === "open" && position && quantity > EPS ? position.totalCostEur / quantity : null;

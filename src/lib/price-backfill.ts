@@ -1,15 +1,17 @@
-import { and, asc, eq, inArray, min } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, max, min } from "drizzle-orm";
 import { ulid } from "ulid";
 import type { DB } from "../db/client";
 import {
   assetTransactions,
   assetValuations,
   assets,
+  fxRates,
   priceHistory,
 } from "../db/schema";
 import type { HistoricalBar } from "./pricing";
-import { resolveSymbol } from "./price-sync";
+import { providerFor, resolveSymbol } from "./price-sync";
 import { toIsoDate } from "./fx";
+import { DAY_MS, isWeekday } from "./time";
 
 export type BackfillClient = {
   fetchHistory: (
@@ -427,6 +429,199 @@ export async function backfillFundPrices(
   }
 
   return summary;
+}
+
+// ---------------------------------------------------------------------------
+// Gap-fill por activo. Al reactivar un activo (o tras un periodo sin cron) su
+// price_history tiene un hueco entre el último cierre almacenado y hoy. Esta
+// función lo rellena vía el fetchHistory del provider efectivo del activo, y
+// para activos no-EUR rellena también los fx_rates que falten en la ventana —
+// sin FX diario la curva EUR no puede reconstruirse. Solo escribe
+// price_history / fx_rates; las valoraciones las reconstruye el llamador con
+// el motor canónico (`rebuildValuationsForAsset`), que es la única fuente de
+// verdad de esa tabla.
+// ---------------------------------------------------------------------------
+
+export type GapClients = {
+  yahoo: BackfillClient;
+  coingecko: BackfillClient;
+  ft: BackfillClient;
+};
+
+export type AssetGapBackfillResult = {
+  assetId: string;
+  provider: string;
+  symbol: string | null;
+  /** Primer día del hueco (ISO); null cuando no había nada que rellenar. */
+  fromIso: string | null;
+  toIso: string;
+  priceRowsInserted: number;
+  fxRowsInserted: number;
+  /** Motivo por el que ni se intentó (sin símbolo, TV sin histórico, …). */
+  skipped?: string;
+};
+
+function isoPlusDays(iso: string, days: number): string {
+  return toIsoDate(new Date(new Date(`${iso}T12:00:00Z`).getTime() + days * DAY_MS));
+}
+
+export async function backfillAssetPriceGap(
+  db: DB,
+  assetId: string,
+  clients: GapClients,
+  today: string = toIsoDate(new Date()),
+): Promise<AssetGapBackfillResult> {
+  const base: AssetGapBackfillResult = {
+    assetId,
+    provider: "",
+    symbol: null,
+    fromIso: null,
+    toIso: today,
+    priceRowsInserted: 0,
+    fxRowsInserted: 0,
+  };
+
+  const asset = await db.select().from(assets).where(eq(assets.id, assetId)).get();
+  if (!asset) return { ...base, skipped: "activo no encontrado" };
+
+  const provider = providerFor(asset);
+  const symbol = resolveSymbol(asset, provider);
+  base.provider = provider;
+  base.symbol = symbol;
+  if (!symbol) return { ...base, skipped: "sin símbolo resoluble para el provider" };
+  if (provider === "tradingview") {
+    // El cliente TradingView no ofrece histórico (solo scanner de cierres del
+    // día) — el hueco queda como está y el siguiente cron reanuda el diario.
+    return { ...base, skipped: "tradingview no ofrece histórico" };
+  }
+
+  // Ventana del hueco: día siguiente al último cierre almacenado (agnóstico a
+  // la fuente — sync, backfill o rescate TV comparten (symbol, fecha)) o, sin
+  // histórico previo, la primera transacción del activo.
+  const lastRow = await db
+    .select({ last: max(priceHistory.pricedDateUtc) })
+    .from(priceHistory)
+    .where(eq(priceHistory.symbol, symbol))
+    .get();
+  let fromIso: string;
+  if (lastRow?.last) {
+    fromIso = isoPlusDays(lastRow.last, 1);
+  } else {
+    const earliestMs = await earliestTradeMs(db, assetId);
+    if (earliestMs == null) {
+      return { ...base, skipped: "sin histórico previo ni transacciones" };
+    }
+    fromIso = toIsoDate(new Date(earliestMs));
+  }
+  if (fromIso > today) return base; // al día — nada que rellenar
+
+  base.fromIso = fromIso;
+  const fromDate = new Date(`${fromIso}T00:00:00.000Z`);
+  const toDate = new Date(`${today}T23:59:59.000Z`);
+  const bars = (await clients[provider].fetchHistory(symbol, fromDate, toDate)).filter(
+    (b) => b.date >= fromIso && b.date <= today,
+  );
+
+  // Inserción idempotente con chequeo de existencia agnóstico a la fuente —
+  // el índice único es (symbol, fecha), y el hueco puede solaparse con filas
+  // escritas por el sync diario tras la reactivación.
+  base.priceRowsInserted = db.transaction((tx) => {
+    const existing = bars.length
+      ? tx
+          .select({ pricedDateUtc: priceHistory.pricedDateUtc })
+          .from(priceHistory)
+          .where(
+            and(
+              eq(priceHistory.symbol, symbol),
+              inArray(
+                priceHistory.pricedDateUtc,
+                bars.map((b) => b.date),
+              ),
+            ),
+          )
+          .all()
+      : [];
+    const have = new Set(existing.map((r) => r.pricedDateUtc));
+    let inserted = 0;
+    for (const bar of bars) {
+      if (have.has(bar.date)) continue;
+      tx
+        .insert(priceHistory)
+        .values({
+          id: ulid(),
+          symbol,
+          price: bar.close,
+          pricedAt: new Date(`${bar.date}T00:00:00.000Z`).getTime(),
+          pricedDateUtc: bar.date,
+          source: `${provider}-gapfill`,
+          createdAt: Date.now(),
+        })
+        .run();
+      inserted++;
+    }
+    return inserted;
+  });
+
+  // FX del hueco. El motor de valoraciones convierte con fx_rates diario por
+  // asset.currency (carry-forward en festivos) — misma convención aquí.
+  const currency = (asset.currency ?? "EUR").toUpperCase();
+  if (currency !== "EUR") {
+    const missing = await missingFxWeekdays(db, currency, fromIso, today);
+    if (missing.size > 0) {
+      // Una semana extra hacia atrás para que el primer día del hueco tenga
+      // carry-forward aunque caiga tras festivo/fin de semana.
+      const fxBars = await clients.yahoo.fetchHistory(
+        `EUR${currency}=X`,
+        new Date(`${isoPlusDays(fromIso, -7)}T00:00:00.000Z`),
+        toDate,
+      );
+      base.fxRowsInserted = db.transaction((tx) => {
+        let inserted = 0;
+        for (const bar of fxBars) {
+          if (!missing.has(bar.date)) continue;
+          if (!(bar.close > 0)) continue;
+          tx
+            .insert(fxRates)
+            .values({
+              id: ulid(),
+              currency,
+              date: bar.date,
+              // EURxxx=X cotiza divisa-por-EUR → rateToEur = 1/cierre.
+              rateToEur: Math.round((1 / bar.close) * 1e10) / 1e10,
+              source: "yahoo-gapfill",
+              createdAt: Date.now(),
+            })
+            .run();
+          inserted++;
+        }
+        return inserted;
+      });
+    }
+  }
+
+  return base;
+}
+
+/** Días laborables de [fromIso, toIso] sin fila fx_rates para la divisa. */
+async function missingFxWeekdays(
+  db: DB,
+  currency: string,
+  fromIso: string,
+  toIso: string,
+): Promise<Set<string>> {
+  const existing = await db
+    .select({ date: fxRates.date })
+    .from(fxRates)
+    .where(
+      and(eq(fxRates.currency, currency), gte(fxRates.date, fromIso), lte(fxRates.date, toIso)),
+    )
+    .all();
+  const have = new Set(existing.map((r) => r.date));
+  const missing = new Set<string>();
+  for (let iso = fromIso; iso <= toIso; iso = isoPlusDays(iso, 1)) {
+    if (isWeekday(iso) && !have.has(iso)) missing.add(iso);
+  }
+  return missing;
 }
 
 /**

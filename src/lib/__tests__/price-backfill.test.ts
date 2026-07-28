@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "../../db/schema";
 import type { DB } from "../../db/client";
 import {
+  backfillAssetPriceGap,
   backfillCryptoPrices,
   backfillFundPrices,
   backfillFundValuations,
@@ -280,5 +281,132 @@ describe("cron backfill-prices route", () => {
       new Request("http://localhost/api/cron/backfill-prices"),
     );
     expect(res.status).toBe(401);
+  });
+});
+
+describe("backfillAssetPriceGap", () => {
+  let db: DB;
+  const today = "2026-07-24";
+
+  beforeEach(() => {
+    db = makeDb();
+  });
+
+  function seedStock(opts?: { currency?: string; priceSource?: string | null; tradingviewSymbol?: string }) {
+    db.insert(schema.assets).values({
+      id: "ast_gap",
+      name: "GAP TEST",
+      assetType: "stock",
+      symbol: "GAP.MC",
+      currency: opts?.currency ?? "EUR",
+      priceSource: opts?.priceSource ?? null,
+      tradingviewSymbol: opts?.tradingviewSymbol ?? null,
+      isActive: true,
+    }).run();
+    db.insert(schema.accounts).values({
+      id: "acct_gap", name: "Broker", accountType: "broker",
+      currency: "EUR", openingBalanceEur: 0, currentCashBalanceEur: 0,
+    }).run();
+    db.insert(schema.assetTransactions).values({
+      id: "tx_gap", accountId: "acct_gap", assetId: "ast_gap",
+      transactionType: "buy", tradedAt: Date.UTC(2026, 0, 5, 12),
+      quantity: 10, unitPrice: 10, tradeCurrency: "EUR", fxRateToEur: 1,
+      tradeGrossAmount: 100, tradeGrossAmountEur: 100,
+      cashImpactEur: -100, feesAmount: 0, feesAmountEur: 0, netAmountEur: -100,
+      isListed: true, source: "manual",
+    }).run();
+  }
+
+  function insertPrice(symbol: string, date: string, price: number) {
+    db.insert(schema.priceHistory).values({
+      id: `ph_${symbol}_${date}`, symbol, price,
+      pricedAt: new Date(`${date}T00:00:00Z`).getTime(),
+      pricedDateUtc: date, source: "yahoo", createdAt: 1,
+    }).run();
+  }
+
+  it("rellena desde el día siguiente al último cierre, agnóstico a la fuente", async () => {
+    seedStock();
+    insertPrice("GAP.MC", "2026-07-20", 10);
+    const yahoo = client({
+      "GAP.MC": [
+        { date: "2026-07-20", close: 10.5 }, // ya existe → no duplica
+        { date: "2026-07-21", close: 11 },
+        { date: "2026-07-22", close: 12 },
+      ],
+    });
+    const result = await backfillAssetPriceGap(db, "ast_gap", { yahoo, coingecko: client({}), ft: client({}) }, today);
+
+    expect(result.skipped).toBeUndefined();
+    expect(result.fromIso).toBe("2026-07-21");
+    expect(result.priceRowsInserted).toBe(2);
+    expect(result.fxRowsInserted).toBe(0); // activo EUR — sin FX
+    const rows = db.select().from(schema.priceHistory)
+      .where(eq(schema.priceHistory.symbol, "GAP.MC")).all()
+      .sort((a, b) => a.pricedDateUtc.localeCompare(b.pricedDateUtc));
+    expect(rows.map((r) => [r.pricedDateUtc, r.price])).toEqual([
+      ["2026-07-20", 10], ["2026-07-21", 11], ["2026-07-22", 12],
+    ]);
+    expect(rows[1].source).toBe("yahoo-gapfill");
+    // El fetch pidió exactamente la ventana del hueco.
+    expect(yahoo.fetchHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("sin histórico previo arranca en la primera transacción", async () => {
+    seedStock();
+    const yahoo = client({ "GAP.MC": [{ date: "2026-01-07", close: 10 }] });
+    const result = await backfillAssetPriceGap(db, "ast_gap", { yahoo, coingecko: client({}), ft: client({}) }, today);
+    expect(result.fromIso).toBe("2026-01-05");
+    expect(result.priceRowsInserted).toBe(1);
+  });
+
+  it("al día (último cierre = hoy) no llama a la red", async () => {
+    seedStock();
+    insertPrice("GAP.MC", today, 10);
+    const yahoo = client({ "GAP.MC": [{ date: today, close: 99 }] });
+    const result = await backfillAssetPriceGap(db, "ast_gap", { yahoo, coingecko: client({}), ft: client({}) }, today);
+    expect(result.fromIso).toBeNull();
+    expect(result.priceRowsInserted).toBe(0);
+    expect(yahoo.fetchHistory).not.toHaveBeenCalled();
+  });
+
+  it("activo USD: rellena también los fx_rates laborables que falten en la ventana", async () => {
+    seedStock({ currency: "USD" });
+    insertPrice("GAP.MC", "2026-07-20", 10);
+    db.insert(schema.fxRates).values({
+      id: "fx_1", currency: "USD", date: "2026-07-21", rateToEur: 0.9,
+      source: "yahoo_fx", createdAt: 1,
+    }).run();
+    const yahoo = client({
+      "GAP.MC": [{ date: "2026-07-22", close: 11 }],
+      // EURUSD=X cotiza USD-por-EUR → rateToEur = 1/cierre.
+      "EURUSD=X": [
+        { date: "2026-07-21", close: 1.25 }, // ya existe fila → no pisa
+        { date: "2026-07-22", close: 1.25 },
+        { date: "2026-07-19", close: 1.10 }, // domingo — fuera de missing
+      ],
+    });
+    const result = await backfillAssetPriceGap(db, "ast_gap", { yahoo, coingecko: client({}), ft: client({}) }, today);
+    expect(result.priceRowsInserted).toBe(1);
+    const fxRows = db.select().from(schema.fxRates)
+      .where(eq(schema.fxRates.currency, "USD")).all()
+      .sort((a, b) => a.date.localeCompare(b.date));
+    // 21 conserva la fila original (0.9); 22 nuevo con 1/1.25 = 0.8.
+    expect(fxRows.map((r) => [r.date, r.rateToEur])).toEqual([
+      ["2026-07-21", 0.9], ["2026-07-22", 0.8],
+    ]);
+    expect(result.fxRowsInserted).toBe(1);
+  });
+
+  it("tradingview no ofrece histórico → skipped", async () => {
+    seedStock({ priceSource: "tradingview", tradingviewSymbol: "BME:GAP" });
+    const result = await backfillAssetPriceGap(db, "ast_gap", { yahoo: client({}), coingecko: client({}), ft: client({}) }, today);
+    expect(result.skipped).toMatch(/tradingview/);
+    expect(result.priceRowsInserted).toBe(0);
+  });
+
+  it("activo inexistente → skipped sin tocar nada", async () => {
+    const result = await backfillAssetPriceGap(db, "nope", { yahoo: client({}), coingecko: client({}), ft: client({}) }, today);
+    expect(result.skipped).toMatch(/no encontrado/);
   });
 });

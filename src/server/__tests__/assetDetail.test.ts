@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { eq } from "drizzle-orm";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
@@ -268,5 +269,81 @@ describe("getAssetDetail", () => {
     expect(detail.dividends).toEqual({
       count: 1, grossEur: 90, netEur: 76.5, withholdingEur: 13.5,
     });
+  });
+});
+
+describe("getAssetDetail — cola de mercado (precio sin posición)", () => {
+  function insertPrice(db: DB, symbol: string, date: string, price: number) {
+    db.insert(schema.priceHistory).values({
+      id: ulid(), symbol, price,
+      pricedAt: new Date(`${date}T00:00:00Z`).getTime(),
+      pricedDateUtc: date, source: "yahoo", createdAt: 1,
+    }).run();
+  }
+
+  it("añade puntos market tras la última valoración con posición y excluye filas legacy qty=0", async () => {
+    const db = makeDb();
+    const { accountId, assetId } = seedAsset(db);
+    db.update(schema.assets).set({ symbol: "QDVE.DE" }).where(eq(schema.assets.id, assetId)).run();
+    insertTrade(db, accountId, assetId, { type: "buy", qty: 10, unitPriceEur: 40, tradedAt: Date.UTC(2026, 0, 5, 12) });
+    insertTrade(db, accountId, assetId, { type: "sell", qty: 10, unitPriceEur: 44, tradedAt: Date.UTC(2026, 2, 1, 12) });
+    insertPosition(db, assetId, 0, 0);
+    seedValuations(db, assetId, [["2026-01-05", 40], ["2026-02-27", 43]]);
+    // Fila legacy del cron antiguo (qty=0 tras la venta) — no debe pintarse.
+    db.insert(schema.assetValuations).values({
+      id: `${assetId}_legacy`, assetId, valuationDate: "2026-03-05",
+      quantity: 0, unitPriceEur: 999, marketValueEur: 0,
+      priceSource: "yahoo", createdAt: 1,
+    }).run();
+    insertPrice(db, "QDVE.DE", "2026-03-10", 50);
+    insertPrice(db, "QDVE.DE", "2026-07-20", 60);
+    insertPrice(db, "QDVE.DE", "2026-08-01", 70); // futuro respecto a TODAY — fuera
+    recompute(db, assetId);
+
+    const detail = (await getAssetDetail(assetId, "MAX", db, TODAY))!;
+    expect(detail.state).toBe("closed");
+    const dates = detail.series.map((p) => p.date);
+    expect(dates).toEqual(["2026-01-05", "2026-02-27", "2026-03-10", "2026-07-20"]);
+    const tail = detail.series.filter((p) => p.market);
+    expect(tail.map((p) => [p.date, p.unitPriceEur])).toEqual([
+      ["2026-03-10", 50],
+      ["2026-07-20", 60],
+    ]);
+    // Los puntos de la ventana de propiedad no llevan flag market.
+    expect(detail.series[0].market).toBeUndefined();
+    // El último precio conocido es el de mercado, no la última valoración.
+    expect(detail.lastPrice).toEqual({ unitPriceEur: 60, date: "2026-07-20" });
+    // El estado cerrado no gana KPIs de posición por tener cola.
+    expect(detail.marketValueEur).toBeNull();
+    expect(detail.sellToday).toBeNull();
+  });
+
+  it("convierte la cola no-EUR con fx_rates y carry-forward, y omite fechas sin FX previo", async () => {
+    const db = makeDb();
+    const { assetId } = seedAsset(db);
+    db.update(schema.assets).set({ symbol: "TSM", currency: "USD" }).where(eq(schema.assets.id, assetId)).run();
+    db.insert(schema.fxRates).values({
+      id: ulid(), currency: "USD", date: "2026-07-01", rateToEur: 0.9, source: "yahoo_fx", createdAt: 1,
+    }).run();
+    insertPrice(db, "TSM", "2026-06-20", 100); // sin FX aún → se omite
+    insertPrice(db, "TSM", "2026-07-01", 100); // 0.9 exacto
+    insertPrice(db, "TSM", "2026-07-03", 110); // carry-forward del 0.9
+
+    const detail = (await getAssetDetail(assetId, "MAX", db, TODAY))!;
+    expect(detail.series.map((p) => [p.date, p.unitPriceEur, p.market])).toEqual([
+      ["2026-07-01", 90, true],
+      ["2026-07-03", 99, true],
+    ]);
+  });
+
+  it("el filtro de rango también recorta la cola de mercado", async () => {
+    const db = makeDb();
+    const { assetId } = seedAsset(db);
+    db.update(schema.assets).set({ symbol: "QDVE.DE" }).where(eq(schema.assets.id, assetId)).run();
+    insertPrice(db, "QDVE.DE", "2026-01-10", 50);
+    insertPrice(db, "QDVE.DE", "2026-07-20", 60);
+
+    const detail = (await getAssetDetail(assetId, "1M", db, TODAY))!;
+    expect(detail.series.map((p) => p.date)).toEqual(["2026-07-20"]);
   });
 });

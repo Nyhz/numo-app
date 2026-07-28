@@ -5,6 +5,7 @@ import {
   Area,
   CartesianGrid,
   ComposedChart,
+  Line,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -19,6 +20,12 @@ type Point = {
   label: string;
   dateIso: string;
   unitPriceEur: number;
+  /** Tramo en cartera (área sólida). Null en la cola de mercado. */
+  owned: number | null;
+  /** Cola de mercado sin posición (línea discontinua). Null en cartera, salvo
+   *  el punto de empalme para que ambas curvas conecten. */
+  market: number | null;
+  isMarket: boolean;
   markers?: AssetTradeMarker[];
 };
 
@@ -79,16 +86,23 @@ export function AssetPriceChart({
   data: AssetPricePoint[];
   averageCostEur: number | null;
 }) {
-  const points: Point[] = useMemo(
-    () =>
-      data.map((p) => ({
-        label: formatLabel(p.date),
-        dateIso: p.date,
-        unitPriceEur: p.unitPriceEur,
-        markers: p.markers,
-      })),
-    [data],
-  );
+  const points: Point[] = useMemo(() => {
+    const out: Point[] = data.map((p) => ({
+      label: formatLabel(p.date),
+      dateIso: p.date,
+      unitPriceEur: p.unitPriceEur,
+      owned: p.market ? null : p.unitPriceEur,
+      market: p.market ? p.unitPriceEur : null,
+      isMarket: !!p.market,
+      markers: p.markers,
+    }));
+    // Empalme: duplicar el último punto en cartera sobre la serie de mercado
+    // para que la línea discontinua arranque pegada al área y no con hueco.
+    const firstMarket = out.findIndex((p) => p.market != null);
+    if (firstMarket > 0) out[firstMarket - 1].market = out[firstMarket - 1].owned;
+    return out;
+  }, [data]);
+  const hasMarketTail = useMemo(() => points.some((p) => p.isMarket), [points]);
   const hasBuys = useMemo(
     () => points.some((p) => p.markers?.some((m) => m.type === "buy")),
     [points],
@@ -116,6 +130,9 @@ export function AssetPriceChart({
         <p className="text-sm font-semibold text-foreground">
           Precio: <SensitiveValue>{formatEur(p.unitPriceEur)}</SensitiveValue>
         </p>
+        {p.isMarket && (
+          <p className="text-xs text-muted-foreground">Precio de mercado — sin posición</p>
+        )}
         {p.markers?.map((m, i) => (
           <p
             key={i}
@@ -186,7 +203,7 @@ export function AssetPriceChart({
           )}
           <Area
             type="monotone"
-            dataKey="unitPriceEur"
+            dataKey="owned"
             stroke="hsl(var(--chart-1))"
             strokeWidth={2}
             isAnimationActive={false}
@@ -194,6 +211,19 @@ export function AssetPriceChart({
             dot={renderDot as never}
             activeDot={false}
           />
+          {hasMarketTail && (
+            <Line
+              type="monotone"
+              dataKey="market"
+              stroke="hsl(var(--chart-1))"
+              strokeWidth={1.5}
+              strokeDasharray="5 4"
+              strokeOpacity={0.75}
+              isAnimationActive={false}
+              dot={renderDot as never}
+              activeDot={false}
+            />
+          )}
         </ComposedChart>
       </ResponsiveContainer>
       <div className="mt-2 flex items-center gap-5 px-1 text-xs text-muted-foreground">
@@ -201,6 +231,12 @@ export function AssetPriceChart({
           <span className="h-0.5 w-4 rounded-full bg-chart-1" aria-hidden />
           Precio (EUR)
         </span>
+        {hasMarketTail && (
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 border-t-2 border-dashed border-chart-1 opacity-75" aria-hidden />
+            Mercado (sin posición)
+          </span>
+        )}
         {averageCostEur != null && (
           <span className="flex items-center gap-1.5">
             <span className="h-0.5 w-4 rounded-full bg-muted-foreground" aria-hidden />

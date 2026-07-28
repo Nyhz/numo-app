@@ -8,6 +8,7 @@ import { db as defaultDb, type DB } from "../db/client";
 import { assets, auditEvents, type Asset } from "../db/schema";
 import { ACTOR, type ActionResult, revalidateAssetMetadata } from "./_shared";
 import { inferAssetClassTax } from "../server/tax/classification";
+import { fireReactivationBackfill } from "../server/reactivation";
 import { updateAssetSchema } from "./updateAsset.schema";
 
 export async function updateAsset(
@@ -31,7 +32,7 @@ export async function updateAsset(
   const now = Date.now();
 
   try {
-    const updated = db.transaction((tx) => {
+    const { row: updated, reactivated } = db.transaction((tx) => {
       const previous = tx.select().from(assets).where(eq(assets.id, id)).get();
       if (!previous) throw new Error(`asset not found: ${id}`);
 
@@ -87,8 +88,13 @@ export async function updateAsset(
         })
         .run();
 
-      return row;
+      return { row, reactivated: !previous.isActive && row.isActive };
     });
+
+    // Reactivación: rellenar en segundo plano el hueco de precios/FX del
+    // periodo desactivado y reconstruir sus valoraciones — la respuesta del
+    // action no espera a la red.
+    if (reactivated) fireReactivationBackfill(id, db);
 
     revalidateAssetMetadata();
     return { ok: true, data: updated };
