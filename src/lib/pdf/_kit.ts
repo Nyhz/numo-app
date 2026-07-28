@@ -342,16 +342,13 @@ export function areaChart(
   const xAt = (i: number) => x0 + (i / (points.length - 1)) * w;
   const yAt = (v: number) => y0 + h - ((v - min) / span) * h;
 
-  // Rejilla: tres reglas horizontales con su valor.
-  doc.setFontSize(6.5);
-  text(doc, FAINT);
+  // Rejilla: tres reglas horizontales, sin valores — las cifras ya viven en
+  // las tarjetas de resumen y el chart gana todo el ancho del contenido.
   stroke(doc, HAIR);
   doc.setLineWidth(0.5);
   for (const frac of [0, 0.5, 1]) {
-    const v = min + span * frac;
-    const gy = yAt(v);
+    const gy = yAt(min + span * frac);
     doc.line(x0, gy, x0 + w, gy);
-    doc.text(fmtEur(v), x0 + w + 4, gy + 2);
   }
 
   // Área rellena con opacidad (GState).

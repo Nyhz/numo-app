@@ -108,7 +108,7 @@ export function buildStatementReportPdf(
     room(160);
     areaChart(
       cur,
-      CONTENT_W - 64,
+      CONTENT_W,
       120,
       series.map((p) => ({ label: p.date, value: p.valueEur })),
     );
@@ -222,9 +222,12 @@ export function buildStatementReportPdf(
     { label: "Coste", x: M + 440, align: "right" },
     { label: "P/G", x: RIGHT, align: "right" },
   ];
+  // Altura de fila de las tablas de posiciones/cuentas. 20pt deja respirar el
+  // contenido (antes 17 — filas demasiado apiladas a petición del Commander).
+  const ROW_H = 20;
   report.groups.forEach((group, gi) => {
     // Sin redibujo de cabecera en el salto: el grupo pinta la suya justo después.
-    room(64);
+    room(72);
     // Cabecera de grupo con punto de color y subtotal.
     const color = CHART[gi % CHART.length];
     fill(doc, color);
@@ -248,12 +251,12 @@ export function buildStatementReportPdf(
     doc.setFontSize(10);
     text(doc, INK);
     doc.text(fmtEur(group.marketValueEur), RIGHT, cur.y, { align: "right" });
-    cur.y += 20;
+    cur.y += 24;
     tableHead(cur, cols);
 
     group.lines.forEach((line, i) => {
-      room(20, (c) => tableHead(c, cols));
-      zebra(cur, i, 17);
+      room(ROW_H + 4, (c) => tableHead(c, cols));
+      zebra(cur, i, ROW_H);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8.5);
       text(doc, INK);
@@ -273,11 +276,11 @@ export function buildStatementReportPdf(
       text(doc, line.pnlEur == null ? FAINT : toneFor(pnl));
       doc.text(fmtPct(line.pnlPct), RIGHT, cur.y, { align: "right" });
       text(doc, INK);
-      cur.y += 17;
+      cur.y += ROW_H;
     });
 
-    room(20);
-    cur.y += 3;
+    room(24);
+    cur.y += 6;
     totalRule(cur);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
@@ -287,7 +290,7 @@ export function buildStatementReportPdf(
     text(doc, toneFor(group.pnlEur));
     doc.text(`${group.pnlEur >= 0 ? "+" : ""}${fmtEur(group.pnlEur)}`, RIGHT, cur.y, { align: "right" });
     text(doc, INK);
-    cur.y += 28;
+    cur.y += 36;
   });
 
   // ── Inmuebles ─────────────────────────────────────────────────────────────
@@ -302,8 +305,8 @@ export function buildStatementReportPdf(
     ];
     tableHead(cur, recols);
     report.realEstate.forEach((line, i) => {
-      room(20, (c) => tableHead(c, recols));
-      zebra(cur, i, 17);
+      room(ROW_H + 4, (c) => tableHead(c, recols));
+      zebra(cur, i, ROW_H);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       text(doc, INK);
@@ -316,18 +319,18 @@ export function buildStatementReportPdf(
       doc.setFont("helvetica", "bold");
       doc.text(fmtEur(line.equityEur), RIGHT, cur.y, { align: "right" });
       text(doc, INK);
-      cur.y += 17;
+      cur.y += ROW_H;
     });
 
-    room(20);
-    cur.y += 3;
+    room(24);
+    cur.y += 6;
     totalRule(cur);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.text("Total inmuebles", M, cur.y);
     doc.text(fmtEur(t.realEstateEquityEur), RIGHT, cur.y, { align: "right" });
     text(doc, INK);
-    cur.y += 28;
+    cur.y += 36;
   }
 
   // ── Cuentas ───────────────────────────────────────────────────────────────
@@ -341,8 +344,8 @@ export function buildStatementReportPdf(
   ];
   tableHead(cur, acols);
   report.accounts.forEach((account, i) => {
-    room(20, (c) => tableHead(c, acols));
-    zebra(cur, i, 17);
+    room(ROW_H + 4, (c) => tableHead(c, acols));
+    zebra(cur, i, ROW_H);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(truncate(account.name, 40), M, cur.y);
@@ -353,12 +356,12 @@ export function buildStatementReportPdf(
     doc.text(fmtEur(account.investedEur), M + 430, cur.y, { align: "right" });
     doc.setFont("helvetica", "bold");
     doc.text(fmtEur(account.totalEur), RIGHT, cur.y, { align: "right" });
-    cur.y += 17;
+    cur.y += ROW_H;
   });
 
   // Banda final de patrimonio total.
-  room(44);
-  cur.y += 6;
+  room(50);
+  cur.y += 12;
   fill(doc, BAND);
   doc.roundedRect(M, cur.y - 12, CONTENT_W, 32, 5, 5, "F");
   fill(doc, ACCENT);
