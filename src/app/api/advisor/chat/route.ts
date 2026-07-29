@@ -92,6 +92,11 @@ export async function POST(req: Request): Promise<Response> {
           startedAt,
         });
 
+        // La respuesta visible ya terminó: libera al cliente antes de la
+        // extracción de memoria (segunda llamada al modelo, varios segundos)
+        // — retener el `done` mantenía el chat en «busy» sin motivo.
+        send({ type: "done" });
+
         // Memory extraction (best-effort — never fails the chat).
         let pending: Array<{ id: string; op: string; field: string; value?: string; reason: string }> = [];
         try {
@@ -120,7 +125,7 @@ export async function POST(req: Request): Promise<Response> {
           });
         }
 
-        send({ type: "done", proposals: pending });
+        send({ type: "proposals", proposals: pending });
         controller.close();
       } catch (err) {
         const friendly =

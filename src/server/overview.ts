@@ -15,6 +15,7 @@ import { getRealEstateEquityAt, getRealEstateEquityByDate } from "./realEstate";
 import { applySplitFactor, isCashBearingAccount, splitFactorOf } from "../lib/domain";
 import { todayIsoLocal } from "../lib/asof";
 import { toIsoDate } from "../lib/time";
+import { buildSparkline } from "../lib/sparkline";
 import { computeXirr, type CashFlow } from "../lib/xirr";
 import { listPositions, type PositionRow } from "./positions";
 
@@ -109,6 +110,16 @@ async function assetIdsForAccounts(
     .where(inArray(assetTransactions.accountId, accountIds))
     .all();
   return new Set(rows.map((r) => r.assetId));
+}
+
+/** Capital invertible (efectivo + posiciones a mercado), sin equity
+ *  inmobiliario. Camino ligero para /simulador: getOverviewKpis computa
+ *  además la serie de patrimonio completa + XIRR que esa página no usa. */
+export async function getInvestibleCapitalEur(db: DB = defaultDb): Promise<number> {
+  const summary = await getAccountsSummary(db);
+  const positions = await listPositions(db);
+  const marketValueEur = positions.reduce((acc, p) => acc + p.marketOrCostEur, 0);
+  return summary.totalEur + marketValueEur;
 }
 
 export async function getOverviewKpis(
@@ -640,12 +651,10 @@ export type TopPositionRow = {
   pnlPct: number | null;
   unitPriceEur: number | null;
   averageCostEur: number;
-  sparkline: Array<{
-    date: string;
-    valueEur: number;
-    investedEur: number;
-    unitPriceEur: number;
-  }>;
+  /** Índice de precio normalizado (base 100), decimado a ≤60 puntos: es lo
+   *  único que pinta el sparkline de 224px — serializar las valoraciones
+   *  completas multiplicaba por ~40 el payload RSC de la página. */
+  sparkline: number[];
 };
 
 export async function getTopPositions(
@@ -667,10 +676,6 @@ export async function getTopPositions(
 
   const assetIds = positions.map((p) => p.position.assetId);
   const contribsInRangeByAsset = new Map<string, number>();
-  // Per-asset map: ISO date → Σ -cashImpactEur of trades on that date.
-  const contribDeltasByAsset = new Map<string, Map<string, number>>();
-  // Per-asset: Σ -cashImpactEur of trades dated BEFORE the range start.
-  const investedBeforeRangeByAsset = new Map<string, number>();
 
   // Bulk-load valuations within the range for sparkline + range P/L.
   const start = rangeStart(filters.range);
@@ -678,7 +683,9 @@ export async function getTopPositions(
   const todayIso = toIsoDate(new Date());
   const startMs = start ? start.getTime() : null;
 
-  if (assetIds.length > 0) {
+  // Las aportaciones solo intervienen en el P/L de rango acotado; en "ALL"
+  // el P/L sale del coste de la posición y esta lectura sobra.
+  if (assetIds.length > 0 && startMs !== null) {
     const txRows = await db
       .select({
         assetId: assetTransactions.assetId,
@@ -689,22 +696,10 @@ export async function getTopPositions(
       .where(inArray(assetTransactions.assetId, assetIds))
       .all();
     for (const r of txRows) {
-      if (startMs !== null && r.tradedAt >= startMs) {
+      if (r.tradedAt >= startMs) {
         contribsInRangeByAsset.set(
           r.assetId,
           (contribsInRangeByAsset.get(r.assetId) ?? 0) - r.cashImpactEur,
-        );
-      }
-      // Accumulate per-day deltas and pre-range running invested.
-      const tradedIso = toIsoDate(new Date(r.tradedAt));
-      const deltas =
-        contribDeltasByAsset.get(r.assetId) ?? new Map<string, number>();
-      deltas.set(tradedIso, (deltas.get(tradedIso) ?? 0) - r.cashImpactEur);
-      contribDeltasByAsset.set(r.assetId, deltas);
-      if (startIso && tradedIso < startIso) {
-        investedBeforeRangeByAsset.set(
-          r.assetId,
-          (investedBeforeRangeByAsset.get(r.assetId) ?? 0) - r.cashImpactEur,
         );
       }
     }
@@ -731,15 +726,7 @@ export async function getTopPositions(
     }
   }
 
-  const valuationsByAsset = new Map<
-    string,
-    Array<{
-      date: string;
-      valueEur: number;
-      investedEur: number;
-      unitPriceEur: number;
-    }>
-  >();
+  const pricesByAsset = new Map<string, number[]>();
   if (assetIds.length > 0) {
     const conds = [
       inArray(assetValuations.assetId, assetIds),
@@ -747,43 +734,26 @@ export async function getTopPositions(
     ];
     if (startIso) conds.push(gte(assetValuations.valuationDate, startIso));
     const vRows = await db
-      .select()
+      .select({
+        assetId: assetValuations.assetId,
+        valuationDate: assetValuations.valuationDate,
+        unitPriceEur: assetValuations.unitPriceEur,
+      })
       .from(assetValuations)
       .where(and(...conds))
       .orderBy(asc(assetValuations.valuationDate))
       .all();
     // Retro-ajuste del precio unitario del sparkline: los puntos anteriores a
     // un canje se expresan en unidades post-canje para que la serie de precio
-    // sea continua (el valueEur ya lo es por construcción).
+    // sea continua.
     const splitsByAsset = loadSplitEvents(db, assetIds);
-    // Per-asset running invested: starts at the pre-range cumulative, and
-    // picks up trade-day deltas as we walk ordered valuations.
-    const runningInvestedByAsset = new Map<string, number>();
-    for (const assetId of assetIds) {
-      runningInvestedByAsset.set(
-        assetId,
-        investedBeforeRangeByAsset.get(assetId) ?? 0,
-      );
-    }
     for (const v of vRows) {
-      const deltas = contribDeltasByAsset.get(v.assetId);
-      if (deltas && deltas.has(v.valuationDate)) {
-        runningInvestedByAsset.set(
-          v.assetId,
-          (runningInvestedByAsset.get(v.assetId) ?? 0) +
-            (deltas.get(v.valuationDate) ?? 0),
-        );
-      }
-      const list = valuationsByAsset.get(v.assetId) ?? [];
-      list.push({
-        date: v.valuationDate,
-        valueEur: v.marketValueEur,
-        investedEur: runningInvestedByAsset.get(v.assetId) ?? 0,
-        unitPriceEur:
-          v.unitPriceEur *
+      const list = pricesByAsset.get(v.assetId) ?? [];
+      list.push(
+        v.unitPriceEur *
           backAdjustFactor(splitsByAsset.get(v.assetId), v.valuationDate),
-      });
-      valuationsByAsset.set(v.assetId, list);
+      );
+      pricesByAsset.set(v.assetId, list);
     }
   }
 
@@ -793,7 +763,7 @@ export async function getTopPositions(
     const valueEur = p.marketOrCostEur;
     const weight = totalValue > 0 ? valueEur / totalValue : 0;
     const costBasisEur = p.position.totalCostEur;
-    const sparkline = valuationsByAsset.get(p.position.assetId) ?? [];
+    const sparkline = buildSparkline(pricesByAsset.get(p.position.assetId) ?? []);
 
     let pnlEur: number;
     let pnlPct: number | null;

@@ -47,6 +47,10 @@ export async function runReactivationBackfill(
   let valuationsRebuilt = false;
   let dailyBalanceRows: number | null = null;
   if (!gap.skipped && gap.fromIso) {
+    // Los dos bloques de abajo son síncronos (better-sqlite3) y bloquean el
+    // único event loop de Next mientras duran. Ceder el turno antes de cada
+    // uno deja colar las requests encoladas entre etapa y etapa.
+    await yieldEventLoop();
     const now = Date.now();
     db.transaction((tx) => {
       // Rebuild acotado al hueco — las filas previas no cambiaron (audit P1).
@@ -68,17 +72,33 @@ export async function runReactivationBackfill(
         .run();
     });
     valuationsRebuilt = true;
+    await yieldEventLoop();
     dailyBalanceRows = rebuildDailyBalances(db);
   }
 
   return { assetId, gap, valuationsRebuilt, dailyBalanceRows };
 }
 
+function yieldEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+/** Backfills en curso, por activo: desactivar/reactivar dos veces seguidas no
+ *  debe lanzar dos gap-fills concurrentes (inserts idempotentes, pero red y
+ *  rebuilds duplicados). */
+const backfillsInFlight = new Set<string>();
+
 /** Disparo fire-and-forget desde el action de reactivación. Solo actúa sobre
  *  la BD real — los tests inyectan la suya y no deben tocar red. */
 export function fireReactivationBackfill(assetId: string, db: DB): void {
   if (db !== defaultDb) return;
-  void runReactivationBackfill(assetId).catch((err) => {
-    console.error(`[reactivation-backfill] ${assetId}:`, err);
-  });
+  if (backfillsInFlight.has(assetId)) return;
+  backfillsInFlight.add(assetId);
+  void runReactivationBackfill(assetId)
+    .catch((err) => {
+      console.error(`[reactivation-backfill] ${assetId}:`, err);
+    })
+    .finally(() => {
+      backfillsInFlight.delete(assetId);
+    });
 }

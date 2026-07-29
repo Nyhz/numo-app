@@ -31,6 +31,8 @@ import {
   getSavingsMovements,
 } from "@/src/server/savings";
 import { formatEur, formatPercent } from "@/src/lib/format";
+import { round, roundEur } from "@/src/lib/money";
+import { decimate } from "@/src/lib/sparkline";
 
 function parseRange(value: string | string[] | undefined): OverviewRange {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -147,6 +149,16 @@ async function NetWorthCard({
     benchKeys,
     series.map((p) => p.date),
   );
+  // Redondeo en la frontera de serialización: el motor trabaja a precisión
+  // completa (los tests de paridad viva/materializada lo exigen), pero
+  // mandar floats de 17 dígitos al cliente duplicaba el peso de cada punto.
+  const chartSeries = decimate(series).map((p) => ({
+    date: p.date,
+    valueEur: roundEur(p.valueEur),
+    investedEur: roundEur(p.investedEur),
+    performanceIndex: round(p.performanceIndex, 3),
+    realEstateEquityEur: roundEur(p.realEstateEquityEur),
+  }));
   return (
     <Card
       title="Evolución del patrimonio"
@@ -159,7 +171,7 @@ async function NetWorthCard({
           description="Las valoraciones diarias aparecerán cuando se sincronicen precios y haya transacciones."
         />
       ) : (
-        <NetWorthChart data={series} benchmarks={benchmarks} />
+        <NetWorthChart data={chartSeries} benchmarks={benchmarks} />
       )}
     </Card>
   );

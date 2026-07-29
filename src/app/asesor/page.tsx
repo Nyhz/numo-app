@@ -5,13 +5,21 @@ import { AdvisorStatusBar } from "@/src/components/features/advisor/AdvisorStatu
 import { readAdvisorConfig } from "@/src/lib/advisor/config";
 import { readProposals } from "@/src/lib/advisor/proposals";
 import { getAdvisorMarketStatus } from "@/src/server/advisor";
-import { listConversations } from "@/src/server/advisorConversations";
+import {
+  getConversationMessages,
+  listConversationMetas,
+} from "@/src/server/advisorConversations";
 
 export default function AsesorPage() {
   const proposals = readProposals();
   const market = getAdvisorMarketStatus();
   const marketIngest = readAdvisorConfig().marketIngestEnabled;
-  const conversations = listConversations();
+  const conversations = listConversationMetas();
+  // Solo el hilo activo (el más reciente) viaja con mensajes; el resto se
+  // carga al seleccionar su pestaña.
+  const activeMessages = conversations[0]
+    ? getConversationMessages(conversations[0].id)
+    : [];
 
   return (
     <div className="flex h-full flex-col gap-5 p-8">
@@ -24,7 +32,11 @@ export default function AsesorPage() {
       </header>
 
       <AdvisorStatusBar market={market} marketIngest={marketIngest} />
-      <AdvisorChat initialProposals={proposals} initialConversations={conversations} />
+      <AdvisorChat
+        initialProposals={proposals}
+        initialConversations={conversations}
+        initialActiveMessages={activeMessages}
+      />
     </div>
   );
 }

@@ -82,8 +82,14 @@ export function getSnapshot(db: DB, year: number): Snapshot | null {
   return state.status === "ok" ? state.snapshot : null;
 }
 
-export function computeDriftSinceSeal(db: DB, year: number): DriftReport | null {
-  const snap = getSnapshot(db, year);
+export function computeDriftSinceSeal(
+  db: DB,
+  year: number,
+  // El caller que ya tiene el snapshot parseado (la página del año) lo pasa
+  // para no re-leer y re-parsear el payload JSON completo en el mismo render.
+  prefetched?: Snapshot | null,
+): DriftReport | null {
+  const snap = prefetched !== undefined ? prefetched : getSnapshot(db, year);
   if (!snap) return null;
   const live = buildTaxReport(db, year);
   const sealed = snap.payload.report;

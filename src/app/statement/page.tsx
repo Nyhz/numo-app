@@ -20,7 +20,9 @@ import { StatementExportMenu } from "@/src/components/features/statement/Stateme
 import { StatementValueChart } from "@/src/components/features/statement/StatementValueChart";
 import { cn } from "@/src/lib/cn";
 import { formatDateTime, formatEur, formatPercent } from "@/src/lib/format";
+import { roundEur } from "@/src/lib/money";
 import { computeRiskMetrics, drawdownSeries } from "@/src/lib/risk";
+import { decimate } from "@/src/lib/sparkline";
 import { accountTypeLabel } from "@/src/lib/labels";
 import {
   OVERVIEW_RANGES,
@@ -135,16 +137,23 @@ function KpiRow({ report }: { report: StatementReport }) {
 
 async function ValueChartCard({ range }: { range: OverviewRange }) {
   const series = await getNetWorthSeries({ range, accountIds: [] });
+  // Frontera de serialización: solo los campos que el chart pinta, decimados
+  // y redondeados — mismo criterio que la gráfica de Resumen.
+  const chartData = decimate(series).map((p) => ({
+    date: p.date,
+    valueEur: roundEur(p.valueEur),
+    investedEur: roundEur(p.investedEur),
+  }));
   return (
     <Card title="Evolución del valor" action={<RangeTabs range={range} />}>
-      {series.length === 0 ? (
+      {chartData.length === 0 ? (
         <StatesBlock
           mode="empty"
           title="Sin historial de valoraciones"
           description="Las valoraciones diarias aparecerán cuando se sincronicen precios y haya transacciones."
         />
       ) : (
-        <StatementValueChart data={series} />
+        <StatementValueChart data={chartData} />
       )}
     </Card>
   );
@@ -154,7 +163,8 @@ async function RiskCard({ range }: { range: OverviewRange }) {
   const series = await getNetWorthSeries({ range, accountIds: [] });
   const indexPoints = series.map((p) => ({ date: p.date, index: p.performanceIndex }));
   const metrics = computeRiskMetrics(indexPoints);
-  const dd = drawdownSeries(indexPoints);
+  // Métricas sobre la serie completa; al cliente solo viaja la curva decimada.
+  const dd = decimate(drawdownSeries(indexPoints));
   if (!metrics || dd.length === 0) {
     return (
       <StatesBlock

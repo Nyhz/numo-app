@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
 import {
   assets,
@@ -9,13 +9,7 @@ import {
   type PriceAlert,
   type WatchlistQuote,
 } from "../db/schema";
-
-export type WatchlistSparkPoint = {
-  date: string;
-  unitPriceEur: number;
-  valueEur: number;
-  investedEur: number;
-};
+import { buildSparkline } from "../lib/sparkline";
 
 export type WatchlistItem = {
   asset: Asset;
@@ -23,12 +17,21 @@ export type WatchlistItem = {
   quote: WatchlistQuote | null;
   /** Most recent daily close from `price_history` (native quote currency). */
   lastClose: number | null;
-  /** Short close series for the card sparkline (oldest → newest). */
-  series: WatchlistSparkPoint[];
+  /** Índice de cierres normalizado (base 100, oldest → newest) para el
+   *  sparkline de la tarjeta. */
+  series: number[];
   alerts: PriceAlert[];
 };
 
 const SPARK_DAYS = 60;
+// Días naturales a retroceder para garantizar SPARK_DAYS sesiones de mercado.
+const SPARK_LOOKBACK_CALENDAR_DAYS = 100;
+
+function sparkCutoffIso(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - SPARK_LOOKBACK_CALENDAR_DAYS);
+  return d.toISOString().slice(0, 10);
+}
 
 function symbolOf(a: Asset): string | null {
   return a.providerSymbol?.trim() || a.symbol?.trim() || a.ticker?.trim() || null;
@@ -67,7 +70,7 @@ export async function listWatchlist(db: DB = defaultDb): Promise<WatchlistItem[]
 
   // Daily closes for the sparkline + last close, in one query across all symbols.
   const symbols = [...new Set(watched.map(symbolOf).filter((s): s is string => !!s))];
-  const seriesBySymbol = new Map<string, WatchlistSparkPoint[]>();
+  const closesBySymbol = new Map<string, number[]>();
   if (symbols.length > 0) {
     const rows = await db
       .select({
@@ -76,7 +79,15 @@ export async function listWatchlist(db: DB = defaultDb): Promise<WatchlistItem[]
         price: priceHistory.price,
       })
       .from(priceHistory)
-      .where(inArray(priceHistory.symbol, symbols))
+      // Cota inferior con margen sobre SPARK_DAYS (fines de semana/festivos):
+      // sin ella se leían años de cierres para luego descartarlos en JS, y
+      // esta lectura se repite cada 60s vía el auto-refresh de /watchlist.
+      .where(
+        and(
+          inArray(priceHistory.symbol, symbols),
+          gte(priceHistory.pricedDateUtc, sparkCutoffIso()),
+        ),
+      )
       .orderBy(asc(priceHistory.symbol), desc(priceHistory.pricedDateUtc))
       .all();
     // rows are newest-first per symbol; keep the last SPARK_DAYS, then reverse.
@@ -85,22 +96,22 @@ export async function listWatchlist(db: DB = defaultDb): Promise<WatchlistItem[]
       const n = counts.get(r.symbol) ?? 0;
       if (n >= SPARK_DAYS) continue;
       counts.set(r.symbol, n + 1);
-      const list = seriesBySymbol.get(r.symbol) ?? [];
-      list.push({ date: r.date, unitPriceEur: r.price, valueEur: 0, investedEur: 0 });
-      seriesBySymbol.set(r.symbol, list);
+      const list = closesBySymbol.get(r.symbol) ?? [];
+      list.push(r.price);
+      closesBySymbol.set(r.symbol, list);
     }
-    for (const [sym, list] of seriesBySymbol) seriesBySymbol.set(sym, list.reverse());
+    for (const [sym, list] of closesBySymbol) closesBySymbol.set(sym, list.reverse());
   }
 
   return watched.map((asset) => {
     const sym = symbolOf(asset);
-    const series = sym ? (seriesBySymbol.get(sym) ?? []) : [];
-    const lastClose = series.length > 0 ? series[series.length - 1].unitPriceEur : null;
+    const closes = sym ? (closesBySymbol.get(sym) ?? []) : [];
+    const lastClose = closes.length > 0 ? closes[closes.length - 1] : null;
     return {
       asset,
       quote: quoteByAsset.get(asset.id) ?? null,
       lastClose,
-      series,
+      series: buildSparkline(closes),
       alerts: alertsByAsset.get(asset.id) ?? [],
     };
   });

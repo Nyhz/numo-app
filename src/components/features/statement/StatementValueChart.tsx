@@ -13,10 +13,16 @@ import {
 } from "recharts";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur, formatEurCompact } from "@/src/lib/format";
-import type { NetWorthPoint } from "@/src/server/overview";
+
+/** Proyección mínima de la serie: la página decima y redondea en la frontera
+ *  de serialización y solo manda los campos que este chart pinta. */
+export type StatementValuePoint = {
+  date: string;
+  valueEur: number;
+  investedEur: number;
+};
 
 type Point = {
-  label: string;
   dateIso: string;
   valueEur: number;
   investedEur: number;
@@ -36,11 +42,10 @@ function formatTooltipDate(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
-export function StatementValueChart({ data }: { data: NetWorthPoint[] }) {
+export function StatementValueChart({ data }: { data: StatementValuePoint[] }) {
   const points: Point[] = useMemo(
     () =>
       data.map((p) => ({
-        label: formatLabel(p.date),
         dateIso: p.date,
         valueEur: p.valueEur,
         investedEur: p.investedEur,
@@ -81,8 +86,11 @@ export function StatementValueChart({ data }: { data: NetWorthPoint[] }) {
             strokeOpacity={0.45}
             vertical={false}
           />
+          {/* Clave única (ISO) — un label "17 jul" repetido en dos años hace
+              que el tooltip salte al primer duplicado. */}
           <XAxis
-            dataKey="label"
+            dataKey="dateIso"
+            tickFormatter={formatLabel}
             stroke="hsl(var(--muted-foreground))"
             tickLine={false}
             axisLine={false}

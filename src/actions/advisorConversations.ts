@@ -7,7 +7,12 @@ import { revalidatePath } from "next/cache";
 import { db as defaultDb, type DB } from "../db/client";
 import { advisorConversations } from "../db/schema";
 import type { ActionResult } from "../lib/domain";
-import type { ConversationWithMessages } from "../server/advisorConversations";
+import {
+  conversationExists,
+  getConversationMessages,
+  type ConversationTurn,
+  type ConversationWithMessages,
+} from "../server/advisorConversations";
 
 const renameSchema = z.object({
   id: z.string().trim().min(1).max(64),
@@ -28,6 +33,23 @@ export async function createConversation(
     ok: true,
     data: { id, title: null, createdAt: now, updatedAt: now, messages: [] },
   };
+}
+
+/** Mensajes de un hilo, bajo demanda: /asesor solo embarca los del hilo
+ *  activo y las pestañas cargan el resto al seleccionarlas. Solo lectura. */
+export async function loadConversationMessages(
+  input: unknown,
+  db: DB = defaultDb,
+): Promise<ActionResult<{ id: string; messages: ConversationTurn[] }>> {
+  const parsed = idSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: { code: "validation", message: "Datos no válidos" } };
+  }
+  const { id } = parsed.data;
+  if (!conversationExists(id, db)) {
+    return { ok: false, error: { code: "not_found", message: "Conversación no encontrada" } };
+  }
+  return { ok: true, data: { id, messages: getConversationMessages(id, db) } };
 }
 
 /** Rename a thread's tab. */

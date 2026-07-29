@@ -37,7 +37,7 @@ export default async function TaxYearPage({ params }: { params: Params }) {
   const models: InformationalModelsStatus = snapshot
     ? snapshot.payload
     : computeInformationalModelsStatus(db, year, blocks);
-  const drift = computeDriftSinceSeal(db, year);
+  const drift = computeDriftSinceSeal(db, year, snapshot);
   const baselines = listDeclaredBaselines(db);
   const years = await getTaxYears();
   // En un año sellado la Previsión debe usar el interés CONGELADO en el sello,

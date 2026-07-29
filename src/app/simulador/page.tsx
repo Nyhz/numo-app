@@ -1,10 +1,10 @@
 export const dynamic = "force-dynamic";
 
 import { SimulatorPanel } from "@/src/components/features/simulator/SimulatorPanel";
-import { getOverviewKpis } from "@/src/server/overview";
+import { getInvestibleCapitalEur } from "@/src/server/overview";
 
 export default async function SimuladorPage() {
-  const kpis = await getOverviewKpis({ range: "ALL", accountIds: [] });
+  const investibleEur = await getInvestibleCapitalEur();
   const baseYear = new Date().getFullYear();
 
   return (
@@ -19,9 +19,9 @@ export default async function SimuladorPage() {
 
       <SimulatorPanel
         // FIRE se calcula solo sobre capital invertible: la vivienda habitual
-        // no genera rentas ni se liquida para vivir, así que se excluye el
-        // equity inmobiliario del prerrelleno (patrimonio − inmuebles).
-        initialCapitalEur={kpis.totalNetWorthEur - kpis.realEstateEquityEur}
+        // no genera rentas ni se liquida para vivir, así que el equity
+        // inmobiliario queda fuera del prerrelleno.
+        initialCapitalEur={investibleEur}
         baseYear={baseYear}
       />
     </div>

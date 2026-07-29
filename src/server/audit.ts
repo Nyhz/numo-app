@@ -14,8 +14,16 @@ export type ListAuditEventsArgs = {
   dateTo?: number;
 };
 
+/** Fila del listado sin los blobs JSON (previous/next/context): el diff se
+ *  carga bajo demanda al expandir — embarcar 50 blobs por página inflaba el
+ *  payload RSC sin que la tabla los usara. */
+export type AuditEventSummary = Omit<
+  AuditEvent,
+  "previousJson" | "nextJson" | "contextJson"
+>;
+
 export type ListAuditEventsResult = {
-  items: AuditEvent[];
+  items: AuditEventSummary[];
   nextCursor: string | null;
 };
 
@@ -49,7 +57,16 @@ export async function listAuditEvents(
 
   const where = filters.length ? and(...filters) : undefined;
   const rows = await db
-    .select()
+    .select({
+      id: auditEvents.id,
+      entityType: auditEvents.entityType,
+      entityId: auditEvents.entityId,
+      action: auditEvents.action,
+      actorType: auditEvents.actorType,
+      source: auditEvents.source,
+      summary: auditEvents.summary,
+      createdAt: auditEvents.createdAt,
+    })
     .from(auditEvents)
     .where(where)
     .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
@@ -62,4 +79,25 @@ export async function listAuditEvents(
   const nextCursor =
     hasMore && last ? encodeCursor({ id: last.id, sortKey: last.createdAt }) : null;
   return { items, nextCursor };
+}
+
+export type AuditEventDiff = {
+  previousJson: string | null;
+  nextJson: string | null;
+};
+
+/** Blobs de un evento concreto, para el diff expandido de la tabla. */
+export async function getAuditEventDiff(
+  id: string,
+  db: DB = defaultDb,
+): Promise<AuditEventDiff | null> {
+  const row = await db
+    .select({
+      previousJson: auditEvents.previousJson,
+      nextJson: auditEvents.nextJson,
+    })
+    .from(auditEvents)
+    .where(eq(auditEvents.id, id))
+    .get();
+  return row ?? null;
 }

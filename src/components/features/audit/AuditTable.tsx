@@ -2,11 +2,17 @@
 
 import * as React from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { loadAuditDiff } from "@/src/actions/loadAuditDiff";
 import { cn } from "@/src/lib/cn";
 import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
-import type { AuditEvent } from "@/src/db/schema";
+import type { AuditEventSummary } from "@/src/server/audit";
 import { formatDateTime } from "@/src/lib/format";
 import { auditActionLabel, auditEntityLabel, auditSourceLabel } from "@/src/lib/labels";
+
+type DiffState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; previousJson: string | null; nextJson: string | null };
 
 function parseJson(raw: string | null): Record<string, unknown> | null {
   if (!raw) return null;
@@ -102,11 +108,25 @@ function DiffView({
   );
 }
 
-export function AuditTable({ rows }: { rows: AuditEvent[] }) {
+export function AuditTable({ rows }: { rows: AuditEventSummary[] }) {
   const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
+  const [diffs, setDiffs] = React.useState<Record<string, DiffState>>({});
 
   function toggle(id: string) {
+    const opening = !expanded[id];
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+    if (!opening || diffs[id]) return;
+    // Primer despliegue de la fila: los blobs no viajan en el listado, se
+    // piden aquí y quedan cacheados para reaperturas.
+    setDiffs((prev) => ({ ...prev, [id]: { status: "loading" } }));
+    void loadAuditDiff({ id }).then((res) => {
+      setDiffs((prev) => ({
+        ...prev,
+        [id]: res.ok
+          ? { status: "ready", previousJson: res.data.previousJson, nextJson: res.data.nextJson }
+          : { status: "error" },
+      }));
+    });
   }
 
   return (
@@ -162,10 +182,29 @@ export function AuditTable({ rows }: { rows: AuditEvent[] }) {
                             {r.summary}
                           </p>
                         )}
-                        <DiffView
-                          previous={parseJson(r.previousJson)}
-                          next={parseJson(r.nextJson)}
-                        />
+                        {(() => {
+                          const diff = diffs[r.id];
+                          if (!diff || diff.status === "loading") {
+                            return (
+                              <p className="text-sm text-muted-foreground">
+                                Cargando detalle…
+                              </p>
+                            );
+                          }
+                          if (diff.status === "error") {
+                            return (
+                              <p className="text-sm text-destructive">
+                                No se pudo cargar el detalle del evento.
+                              </p>
+                            );
+                          }
+                          return (
+                            <DiffView
+                              previous={parseJson(diff.previousJson)}
+                              next={parseJson(diff.nextJson)}
+                            />
+                          );
+                        })()}
                       </td>
                     </tr>
                   )}

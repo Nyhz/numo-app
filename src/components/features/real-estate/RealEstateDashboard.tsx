@@ -4,11 +4,11 @@ import { Building2 } from "lucide-react";
 import * as React from "react";
 import { Button } from "@/src/components/ui/Button";
 import { StatesBlock } from "@/src/components/ui/StatesBlock";
-import type { RealEstateOverview } from "@/src/server/realEstate";
+import type { RealEstateOverviewPayload } from "@/src/server/realEstate";
 import { CreatePropertyModal } from "./CreatePropertyModal";
 import { PropertySection } from "./PropertySection";
 
-export function RealEstateDashboard({ overview }: { overview: RealEstateOverview }) {
+export function RealEstateDashboard({ overview }: { overview: RealEstateOverviewPayload }) {
   const [creating, setCreating] = React.useState(false);
   return (
     <div className="flex flex-col gap-8">

@@ -10,13 +10,16 @@ import { AdvisorConversationTabs } from "./AdvisorConversationTabs";
 import {
   createConversation,
   deleteConversation,
+  loadConversationMessages,
   renameConversation,
 } from "@/src/actions/advisorConversations";
 import { toastResult } from "@/src/lib/toast";
-import type { ConversationWithMessages } from "@/src/server/advisorConversations";
+import type { ConversationMeta } from "@/src/server/advisorConversations";
 
 type Msg = { role: "user" | "assistant"; content: string };
-type Conv = { id: string; title: string | null; messages: Msg[] };
+// `loaded`: los mensajes de un hilo no viajan con la página (solo los del
+// activo); las demás pestañas se hidratan al seleccionarlas.
+type Conv = { id: string; title: string | null; messages: Msg[]; loaded: boolean };
 
 /** Same truncation as the server's deriveTitle, so the optimistic tab label
  *  matches what gets persisted. */
@@ -28,12 +31,19 @@ function clientTitle(message: string): string {
 export function AdvisorChat({
   initialProposals = [],
   initialConversations = [],
+  initialActiveMessages = [],
 }: {
   initialProposals?: Proposal[];
-  initialConversations?: ConversationWithMessages[];
+  initialConversations?: ConversationMeta[];
+  initialActiveMessages?: Msg[];
 }) {
   const [conversations, setConversations] = React.useState<Conv[]>(() =>
-    initialConversations.map((c) => ({ id: c.id, title: c.title, messages: c.messages })),
+    initialConversations.map((c, i) => ({
+      id: c.id,
+      title: c.title,
+      messages: i === 0 ? initialActiveMessages : [],
+      loaded: i === 0,
+    })),
   );
   const [activeId, setActiveId] = React.useState<string | null>(
     () => initialConversations[0]?.id ?? null,
@@ -57,6 +67,30 @@ export function AdvisorChat({
     setConversations((cs) => cs.map((c) => (c.id === id ? fn(c) : c)));
   }
 
+  const loadingRef = React.useRef<Set<string>>(new Set());
+
+  function hydrateConv(id: string) {
+    if (loadingRef.current.has(id)) return;
+    loadingRef.current.add(id);
+    void loadConversationMessages({ id })
+      .then((res) => {
+        if (res.ok) {
+          patchConv(id, (c) => ({ ...c, messages: res.data.messages, loaded: true }));
+        } else {
+          setError(res.error.message);
+        }
+      })
+      .finally(() => {
+        loadingRef.current.delete(id);
+      });
+  }
+
+  function handleSelect(id: string) {
+    setActiveId(id);
+    const conv = conversations.find((c) => c.id === id);
+    if (conv && !conv.loaded) hydrateConv(id);
+  }
+
   async function handleNew() {
     if (busy) return;
     setError(null);
@@ -65,7 +99,10 @@ export function AdvisorChat({
       setError(res.error.message);
       return;
     }
-    setConversations((cs) => [{ id: res.data.id, title: null, messages: [] }, ...cs]);
+    setConversations((cs) => [
+      { id: res.data.id, title: null, messages: [], loaded: true },
+      ...cs,
+    ]);
     setActiveId(res.data.id);
   }
 
@@ -96,6 +133,9 @@ export function AdvisorChat({
   async function send() {
     const message = input.trim();
     if (!message || busy) return;
+    // Un hilo aún sin hidratar no puede enviar: el historial que viaja al
+    // asesor saldría vacío y perdería el contexto de la conversación.
+    if (activeConv && !activeConv.loaded) return;
     setError(null);
 
     // Ensure a conversation exists to attach this exchange to.
@@ -107,7 +147,10 @@ export function AdvisorChat({
         return;
       }
       convId = res.data.id;
-      setConversations((cs) => [{ id: res.data.id, title: null, messages: [] }, ...cs]);
+      setConversations((cs) => [
+        { id: res.data.id, title: null, messages: [], loaded: true },
+        ...cs,
+      ]);
       setActiveId(convId);
     }
     const targetId = convId;
@@ -144,7 +187,8 @@ export function AdvisorChat({
           if (!line) continue;
           const evt = JSON.parse(line.slice(6)) as
             | { type: "delta"; text: string }
-            | { type: "done"; proposals: Proposal[] }
+            | { type: "done" }
+            | { type: "proposals"; proposals: Proposal[] }
             | { type: "error"; message: string };
           if (evt.type === "delta") {
             patchConv(targetId, (c) => {
@@ -156,9 +200,12 @@ export function AdvisorChat({
               return { ...c, messages: next };
             });
           } else if (evt.type === "done") {
-            setProposals(evt.proposals ?? []);
-            // Refresh server components (cost bar, profile) with the new spend.
+            // La respuesta visible ha terminado; la extracción de memoria
+            // sigue en el servidor y sus propuestas llegan por su evento.
+            setBusy(false);
             router.refresh();
+          } else if (evt.type === "proposals") {
+            setProposals(evt.proposals ?? []);
           } else if (evt.type === "error") {
             setError(evt.message);
           }
@@ -191,7 +238,7 @@ export function AdvisorChat({
         conversations={conversations.map((c) => ({ id: c.id, title: c.title }))}
         activeId={activeId}
         busy={busy}
-        onSelect={setActiveId}
+        onSelect={handleSelect}
         onNew={handleNew}
         onRename={handleRename}
         onEnd={handleEnd}
@@ -201,12 +248,16 @@ export function AdvisorChat({
         ref={scrollRef}
         className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto rounded-lg border border-border bg-card p-4"
       >
-        {messages.length === 0 && (
+        {activeConv && !activeConv.loaded ? (
+          <p className="m-auto text-center text-[15px] text-muted-foreground">
+            Cargando conversación…
+          </p>
+        ) : messages.length === 0 ? (
           <p className="m-auto max-w-md text-center text-[15px] text-muted-foreground">
             Pregúntame por tu cartera, riesgos, oportunidades o cualquier duda financiera. Tengo
             tus posiciones en vivo y tu perfil.
           </p>
-        )}
+        ) : null}
         {messages.map((m, i) => (
           <div
             key={i}
@@ -263,9 +314,12 @@ export function AdvisorChat({
           rows={3}
           placeholder="Escribe tu pregunta…  (Enter para enviar, Shift+Enter salto de línea)"
           className="flex-1 resize-none rounded-md border border-border bg-background px-3.5 py-2.5 text-[15px] leading-relaxed outline-none focus:ring-2 focus:ring-primary"
-          disabled={busy}
+          disabled={busy || Boolean(activeConv && !activeConv.loaded)}
         />
-        <Button type="submit" disabled={busy || !input.trim()}>
+        <Button
+          type="submit"
+          disabled={busy || !input.trim() || Boolean(activeConv && !activeConv.loaded)}
+        >
           {busy ? "…" : "Enviar"}
         </Button>
       </form>

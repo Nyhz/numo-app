@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { and, eq, inArray, max, or } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
 import {
@@ -62,7 +63,10 @@ async function latestValuationsFor(
   return new Map(rows.map((v) => [v.assetId, v]));
 }
 
-export async function listPositions(db: DB = defaultDb): Promise<PositionRow[]> {
+/** Memoizada por request (mismo patrón que getNetWorthSeries): /statement y
+ *  /objectives la invocan desde varios agregados en el mismo render y sin
+ *  esto cada uno repetía las 3 queries. */
+export const listPositions = cache(async (db: DB = defaultDb): Promise<PositionRow[]> => {
   const rows = await db
     .select({ position: assetPositions, asset: assets })
     .from(assetPositions)
@@ -87,7 +91,7 @@ export async function listPositions(db: DB = defaultDb): Promise<PositionRow[]> 
       valuedAtCost: valuationEur == null,
     };
   });
-}
+});
 
 export async function getPositionsByAccount(
   accountId: string,

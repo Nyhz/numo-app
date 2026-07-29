@@ -53,6 +53,25 @@ export type RealEstateOverview = {
   properties: PropertySummary[];
 };
 
+/** Variante serializable al cliente: sin el cuadro de amortización completo
+ *  (~360 filas/hipoteca) — el cliente ya lleva el motor puro y lo deriva de
+ *  terms+events (mortgageClient), que sí viajan. */
+export type PropertySummaryPayload = Omit<PropertySummary, "schedule">;
+
+export type RealEstateOverviewPayload = Omit<RealEstateOverview, "properties"> & {
+  properties: PropertySummaryPayload[];
+};
+
+export function stripSchedules(overview: RealEstateOverview): RealEstateOverviewPayload {
+  return {
+    ...overview,
+    properties: overview.properties.map(({ schedule, ...rest }) => {
+      void schedule;
+      return rest;
+    }),
+  };
+}
+
 export type StatementRealEstateLine = {
   propertyId: string;
   name: string;

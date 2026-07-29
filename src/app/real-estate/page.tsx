@@ -1,10 +1,10 @@
 export const dynamic = "force-dynamic";
 
 import { RealEstateDashboard } from "@/src/components/features/real-estate/RealEstateDashboard";
-import { getRealEstateOverview } from "@/src/server/realEstate";
+import { getRealEstateOverview, stripSchedules } from "@/src/server/realEstate";
 
 export default async function RealEstatePage() {
-  const overview = await getRealEstateOverview();
+  const overview = stripSchedules(await getRealEstateOverview());
   return (
     <div className="flex flex-col gap-6 p-8">
       <header className="flex flex-col gap-1">

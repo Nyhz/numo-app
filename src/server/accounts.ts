@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { asc, eq } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
 import { accounts, dailyBalances, type Account, type DailyBalance } from "../db/schema";
@@ -11,10 +12,14 @@ function effectiveCashEur(row: Account): number {
   return isCashBearingAccount(row.accountType) ? row.currentCashBalanceEur : 0;
 }
 
-export async function listAccounts(db: DB = defaultDb): Promise<AccountWithTotals[]> {
-  const rows = await db.select().from(accounts).orderBy(asc(accounts.name)).all();
-  return rows.map((row) => ({ ...row, totalBalanceEur: effectiveCashEur(row) }));
-}
+// Memoizada por request: el shell de '/' y varios agregados de /statement la
+// piden en el mismo render.
+export const listAccounts = cache(
+  async (db: DB = defaultDb): Promise<AccountWithTotals[]> => {
+    const rows = await db.select().from(accounts).orderBy(asc(accounts.name)).all();
+    return rows.map((row) => ({ ...row, totalBalanceEur: effectiveCashEur(row) }));
+  },
+);
 
 export async function getAccount(id: string, db: DB = defaultDb): Promise<Account | null> {
   const row = await db.select().from(accounts).where(eq(accounts.id, id)).get();

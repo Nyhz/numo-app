@@ -1,7 +1,7 @@
 import type { MortgageScheduleEvent, MortgageTerms } from "@/src/lib/mortgage";
 import type { PropertySummary } from "@/src/server/realEstate";
 
-export function termsOf(summary: PropertySummary): MortgageTerms | null {
+export function termsOf(summary: Pick<PropertySummary, "mortgage">): MortgageTerms | null {
   const m = summary.mortgage;
   if (!m) return null;
   return {
@@ -12,7 +12,7 @@ export function termsOf(summary: PropertySummary): MortgageTerms | null {
   };
 }
 
-export function scheduleEventsOf(summary: PropertySummary): MortgageScheduleEvent[] {
+export function scheduleEventsOf(summary: Pick<PropertySummary, "events">): MortgageScheduleEvent[] {
   return summary.events.map((e) => {
     if (e.type === "early_repayment") {
       return {

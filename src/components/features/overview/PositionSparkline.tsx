@@ -2,39 +2,22 @@
 
 import { Area, AreaChart, YAxis } from "recharts";
 
-type Point = {
-  date: string;
-  valueEur: number;
-  investedEur: number;
-  unitPriceEur: number;
-};
-
-const BASELINE = 100;
 const EDGE_PADDING_RATIO = 0.08;
 const MIN_EDGE_PADDING = 0.5;
 
-export function PositionSparkline({ data, id }: { data: Point[]; id: string }) {
+/** `data` llega del servidor ya normalizado: índice de precio base 100,
+ *  decimado a lo que un sparkline de 224px puede mostrar. */
+export function PositionSparkline({ data, id }: { data: number[]; id: string }) {
   if (data.length < 2) {
     return <span className="text-muted-foreground">—</span>;
   }
-  // Pure price performance: normalize each point to the first non-zero unit
-  // price in the window. This reflects the asset's own market move,
-  // independent of the user's buys/sells.
-  const basePrice =
-    data.find((p) => p.unitPriceEur > 0)?.unitPriceEur ?? 0;
-  if (basePrice <= 0) {
-    return <span className="text-muted-foreground">—</span>;
-  }
-  const series = data.map((p) => ({
-    marketIndex: (p.unitPriceEur / basePrice) * BASELINE,
-  }));
+  const series = data.map((marketIndex) => ({ marketIndex }));
 
   const stroke = "hsl(var(--primary))";
   const gradientId = `spark-${id}`;
 
-  const values = series.map((d) => d.marketIndex);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  const min = Math.min(...data);
+  const max = Math.max(...data);
   const spread = max - min;
   const pad =
     spread === 0

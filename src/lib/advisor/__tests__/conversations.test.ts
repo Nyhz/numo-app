@@ -9,7 +9,10 @@ import type { DB } from "../../../db/client";
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { deriveTitle, persistChatExchange } from "../conversationStore";
-import { listConversations } from "../../../server/advisorConversations";
+import {
+  getConversationMessages,
+  listConversationMetas,
+} from "../../../server/advisorConversations";
 import {
   createConversation,
   deleteConversation,
@@ -34,7 +37,7 @@ describe("deriveTitle", () => {
   });
 });
 
-describe("persistChatExchange + listConversations", () => {
+describe("persistChatExchange + listConversationMetas/getConversationMessages", () => {
   let db: DB;
   beforeEach(() => {
     db = makeDb();
@@ -48,10 +51,10 @@ describe("persistChatExchange + listConversations", () => {
 
     persistChatExchange(id, "¿Cómo va mi cartera?", "Va bien.", new Date(1_000), db);
 
-    let convs = listConversations(db);
+    let convs = listConversationMetas(db);
     expect(convs).toHaveLength(1);
     expect(convs[0].title).toBe("¿Cómo va mi cartera?");
-    expect(convs[0].messages).toEqual([
+    expect(getConversationMessages(id, db)).toEqual([
       { role: "user", content: "¿Cómo va mi cartera?" },
       { role: "assistant", content: "Va bien." },
     ]);
@@ -59,9 +62,9 @@ describe("persistChatExchange + listConversations", () => {
 
     // A second exchange keeps the original title and appends in order.
     persistChatExchange(id, "¿Y el riesgo?", "Moderado.", new Date(2_000), db);
-    convs = listConversations(db);
+    convs = listConversationMetas(db);
     expect(convs[0].title).toBe("¿Cómo va mi cartera?");
-    expect(convs[0].messages.map((m) => m.content)).toEqual([
+    expect(getConversationMessages(id, db).map((m) => m.content)).toEqual([
       "¿Cómo va mi cartera?",
       "Va bien.",
       "¿Y el riesgo?",
@@ -72,7 +75,8 @@ describe("persistChatExchange + listConversations", () => {
 
   it("is a no-op when the conversation does not exist", () => {
     persistChatExchange("MISSING", "hola", "adiós", new Date(), db);
-    expect(listConversations(db)).toHaveLength(0);
+    expect(listConversationMetas(db)).toHaveLength(0);
+    expect(getConversationMessages("MISSING", db)).toEqual([]);
   });
 
   it("orders conversations by most recent activity", async () => {
@@ -82,7 +86,7 @@ describe("persistChatExchange + listConversations", () => {
     persistChatExchange(a.data.id, "primera", "ok", new Date(10), db);
     persistChatExchange(b.data.id, "segunda", "ok", new Date(20), db);
 
-    const convs = listConversations(db);
+    const convs = listConversationMetas(db);
     expect(convs.map((c) => c.id)).toEqual([b.data.id, a.data.id]);
   });
 });
@@ -98,7 +102,7 @@ describe("conversation actions", () => {
     if (!created.ok) throw new Error("setup failed");
     const res = await renameConversation({ id: created.data.id, title: "Plan jubilación" }, db);
     expect(res.ok).toBe(true);
-    expect(listConversations(db)[0].title).toBe("Plan jubilación");
+    expect(listConversationMetas(db)[0].title).toBe("Plan jubilación");
   });
 
   it("rejects renaming an unknown conversation", async () => {
@@ -115,7 +119,7 @@ describe("conversation actions", () => {
 
     const res = await deleteConversation({ id: created.data.id }, db);
     expect(res.ok).toBe(true);
-    expect(listConversations(db)).toHaveLength(0);
+    expect(listConversationMetas(db)).toHaveLength(0);
     expect(db.select().from(schema.advisorMessages).all()).toHaveLength(0);
   });
 });

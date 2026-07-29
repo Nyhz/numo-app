@@ -55,9 +55,13 @@ export async function activateBenchmark(
           createdAt: Date.now(),
         })
         .run();
+      // Solo hay datos nuevos que invalidar cuando el backfill insertó filas;
+      // en el caso común (cobertura fresca) el router.replace posterior ya
+      // re-renderiza '/' con datos frescos — revalidar aquí duplicaba el
+      // round-trip RSC completo en cada activación.
+      revalidatePath("/");
     }
 
-    revalidatePath("/");
     return { ok: true, data: summary };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

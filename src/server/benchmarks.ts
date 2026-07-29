@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
 import { priceHistory } from "../db/schema";
 import { benchmarkByKey, type BenchmarkKey } from "../lib/benchmarks";
+import { round } from "../lib/money";
 
 export type BenchmarkSeries = {
   key: BenchmarkKey;
@@ -70,7 +71,9 @@ export async function getBenchmarkSeries(
       }
       if (last == null) continue; // before the benchmark's first close
       if (anchor == null) anchor = last;
-      indexByDate[date] = (last / anchor) * 100;
+      // 3 decimales bastan para un eje en % — la precisión float completa
+      // solo engordaba el payload RSC (~17 dígitos por punto).
+      indexByDate[date] = round((last / anchor) * 100, 3);
     }
 
     out.push({ key, label: bench.label, colorVar: bench.colorVar, indexByDate });

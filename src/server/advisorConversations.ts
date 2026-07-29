@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { db as defaultDb, type DB } from "../db/client";
 import { advisorConversations, advisorMessages } from "../db/schema";
 
@@ -13,46 +13,44 @@ export type ConversationWithMessages = {
   messages: ConversationTurn[];
 };
 
+export type ConversationMeta = {
+  id: string;
+  title: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
 /**
- * All persisted advisor threads, newest activity first, each with its messages.
- * Single-user, modest volume → loading everything is cheaper than per-tab fetches,
- * so switching tabs is instant client-side. Capped defensively.
+ * Pestañas del chat: solo metadatos, más recientes primero. Los mensajes se
+ * cargan por conversación bajo demanda — embarcar el historial íntegro de
+ * hasta 50 hilos en cada visita a /asesor crecía sin techo con el uso.
  */
-export function listConversations(dbc: DB = defaultDb, limit = 50): ConversationWithMessages[] {
-  const convs = dbc
-    .select()
+export function listConversationMetas(dbc: DB = defaultDb, limit = 50): ConversationMeta[] {
+  return dbc
+    .select({
+      id: advisorConversations.id,
+      title: advisorConversations.title,
+      createdAt: advisorConversations.createdAt,
+      updatedAt: advisorConversations.updatedAt,
+    })
     .from(advisorConversations)
     .orderBy(desc(advisorConversations.updatedAt))
     .limit(limit)
     .all();
-  if (!convs.length) return [];
+}
 
-  const ids = convs.map((c) => c.id);
-  const rows = dbc
-    .select({
-      conversationId: advisorMessages.conversationId,
-      role: advisorMessages.role,
-      content: advisorMessages.content,
-    })
+/** Mensajes de un hilo concreto, en orden cronológico. */
+export function getConversationMessages(id: string, dbc: DB = defaultDb): ConversationTurn[] {
+  return dbc
+    .select({ role: advisorMessages.role, content: advisorMessages.content })
     .from(advisorMessages)
-    .where(inArray(advisorMessages.conversationId, ids))
+    .where(eq(advisorMessages.conversationId, id))
     .orderBy(asc(advisorMessages.createdAt))
-    .all();
-
-  const byConv = new Map<string, ConversationTurn[]>();
-  for (const r of rows) {
-    const list = byConv.get(r.conversationId) ?? [];
-    list.push({ role: r.role === "assistant" ? "assistant" : "user", content: r.content });
-    byConv.set(r.conversationId, list);
-  }
-
-  return convs.map((c) => ({
-    id: c.id,
-    title: c.title,
-    createdAt: c.createdAt,
-    updatedAt: c.updatedAt,
-    messages: byConv.get(c.id) ?? [],
-  }));
+    .all()
+    .map((r) => ({
+      role: r.role === "assistant" ? ("assistant" as const) : ("user" as const),
+      content: r.content,
+    }));
 }
 
 /** True if a conversation row exists — guards message persistence against a stale id. */
