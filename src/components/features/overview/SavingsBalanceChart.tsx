@@ -14,7 +14,7 @@ import { SensitiveValue } from "@/src/components/ui/SensitiveValue";
 import { formatEur, formatEurCompact } from "@/src/lib/format";
 import type { SavingsBalancePoint } from "@/src/server/savings";
 
-type Point = { dateIso: string; label: string; balanceEur: number };
+type Point = { dateIso: string; balanceEur: number };
 
 function formatLabel(iso: string): string {
   const d = new Date(`${iso}T12:00:00Z`);
@@ -35,7 +35,6 @@ export function SavingsBalanceChart({ data }: { data: SavingsBalancePoint[] }) {
     () =>
       data.map((p) => ({
         dateIso: p.date,
-        label: formatLabel(p.date),
         balanceEur: Math.round(p.balanceEur * 100) / 100,
       })),
     [data],
@@ -65,8 +64,11 @@ export function SavingsBalanceChart({ data }: { data: SavingsBalancePoint[] }) {
             strokeOpacity={0.4}
             vertical={false}
           />
+          {/* Clave única (ISO) — un label "17 jul" repetido en dos años hace
+              que el tooltip salte al primer duplicado. */}
           <XAxis
-            dataKey="label"
+            dataKey="dateIso"
+            tickFormatter={formatLabel}
             tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
             tickLine={false}
             axisLine={false}

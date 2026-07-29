@@ -17,7 +17,6 @@ import { formatEur, formatEurCompact, formatQuantity } from "@/src/lib/format";
 import type { AssetPricePoint, AssetTradeMarker } from "@/src/server/assetDetail";
 
 type Point = {
-  label: string;
   dateIso: string;
   unitPriceEur: number;
   /** Tramo en cartera (área sólida). Null en la cola de mercado. */
@@ -88,7 +87,6 @@ export function AssetPriceChart({
 }) {
   const points: Point[] = useMemo(() => {
     const out: Point[] = data.map((p) => ({
-      label: formatLabel(p.date),
       dateIso: p.date,
       unitPriceEur: p.unitPriceEur,
       owned: p.market ? null : p.unitPriceEur,
@@ -164,8 +162,11 @@ export function AssetPriceChart({
             strokeOpacity={0.45}
             vertical={false}
           />
+          {/* Clave única (ISO) — un label "17 jul" repetido en dos años hace
+              que el tooltip salte al primer duplicado. */}
           <XAxis
-            dataKey="label"
+            dataKey="dateIso"
+            tickFormatter={formatLabel}
             stroke="hsl(var(--muted-foreground))"
             tickLine={false}
             axisLine={false}

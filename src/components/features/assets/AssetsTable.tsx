@@ -12,6 +12,7 @@ import { AssetLogo } from "@/src/components/ui/AssetLogo";
 import { assetTypeLabel } from "@/src/components/ui/AssetTypeBadge";
 import { deactivateAsset } from "@/src/actions/deactivateAsset";
 import { deleteAsset } from "@/src/actions/deleteAsset";
+import { updateAsset } from "@/src/actions/updateAsset";
 import { toast, toastResult } from "@/src/lib/toast";
 import type { Asset } from "@/src/db/schema";
 import type { AssetListRow } from "@/src/server/assets";
@@ -42,6 +43,17 @@ export function AssetsTable({ rows }: { rows: AssetListRow[] }) {
     const result = await deactivateAsset({ id: active.id });
     toastResult(result, "Activo desactivado");
     closeModal();
+  }
+
+  // Reactivación sin confirm (no es destructiva): dispara el gap-fill de
+  // precios/FX del periodo desactivado en segundo plano — mismo camino y
+  // mismo aviso que el checkbox «Activo» del modal de edición.
+  async function reactivate(asset: Asset) {
+    const result = await updateAsset({ id: asset.id, isActive: true });
+    toastResult(result, "Activo reactivado", {
+      description:
+        "Rellenando en segundo plano el histórico de precios del periodo desactivado…",
+    });
   }
 
   async function confirmDelete() {
@@ -135,13 +147,15 @@ export function AssetsTable({ rows }: { rows: AssetListRow[] }) {
                   >
                     <MenuItem onSelect={() => open("edit", r)}>Editar</MenuItem>
                     <MenuItem onSelect={() => open("price", r)}>Fijar precio manual</MenuItem>
-                    <MenuItem
-                      onSelect={() => open("deactivate", r)}
-                      disabled={!r.isActive}
-                      danger
-                    >
-                      Desactivar
-                    </MenuItem>
+                    {r.isActive ? (
+                      <MenuItem onSelect={() => open("deactivate", r)} danger>
+                        Desactivar
+                      </MenuItem>
+                    ) : (
+                      <MenuItem onSelect={() => void reactivate(r)}>
+                        Reactivar
+                      </MenuItem>
+                    )}
                     <MenuItem onSelect={() => open("delete", r)} danger>
                       Eliminar
                     </MenuItem>

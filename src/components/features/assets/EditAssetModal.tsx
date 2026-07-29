@@ -6,6 +6,7 @@ import { Button } from "@/src/components/ui/Button";
 import { updateAsset } from "@/src/actions/updateAsset";
 import { toast } from "@/src/lib/toast";
 import { ASSET_TYPES } from "@/src/actions/_constants";
+import { PRICE_SOURCES, PRICE_SOURCE_LABELS } from "@/src/lib/domain";
 import { assetTypeLabel } from "@/src/components/ui/AssetTypeBadge";
 import type { Asset } from "@/src/db/schema";
 
@@ -19,6 +20,7 @@ type FormState = {
   providerSymbol: string;
   tradingviewSymbol: string;
   logoUrl: string;
+  priceSource: string;
   isActive: boolean;
 };
 
@@ -33,6 +35,7 @@ function stateFromAsset(a: Asset): FormState {
     providerSymbol: a.providerSymbol ?? "",
     tradingviewSymbol: a.tradingviewSymbol ?? "",
     logoUrl: a.logoUrl ?? "",
+    priceSource: a.priceSource ?? "",
     isActive: a.isActive,
   };
 }
@@ -84,6 +87,7 @@ export function EditAssetModal({
       providerSymbol: form.providerSymbol.trim() ? form.providerSymbol.trim() : null,
       tradingviewSymbol: form.tradingviewSymbol.trim() ? form.tradingviewSymbol.trim() : null,
       logoUrl: form.logoUrl.trim() ? form.logoUrl.trim() : null,
+      priceSource: form.priceSource ? form.priceSource : null,
       isActive: form.isActive,
     };
 
@@ -236,6 +240,25 @@ export function EditAssetModal({
             placeholder="https://s3-symbol-logo.tradingview.com/…"
             className={inputClass}
           />
+        </Field>
+
+        <Field label="Fuente de precio" errors={fieldErrors.priceSource}>
+          <select
+            value={form.priceSource}
+            onChange={(e) => update("priceSource", e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Automática (por tipo)</option>
+            {PRICE_SOURCES.map((s) => (
+              <option key={s} value={s}>
+                {PRICE_SOURCE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-muted-foreground">
+            Déjalo en automática salvo para fondos que Yahoo no cotiza:
+            elige «Financial Times» y la sincronización usará el ISIN.
+          </span>
         </Field>
 
         <label className="flex items-center gap-2 text-sm">
