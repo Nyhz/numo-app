@@ -1,7 +1,11 @@
 import "server-only";
 import { runAdvisorOnce, type AdvisorUsage } from "./client";
 import { readAdvisorConfig } from "./config";
-import { appendJournal, readDigest, writeDigest } from "./memory";
+import { DIGEST_MAX_BYTES, appendJournal, readDigest, writeDigest } from "./memory";
+
+// Presupuesto que se le comunica al modelo, por debajo del límite duro de
+// writeDigest para dejar colchón (URLs largas, la línea de fecha, etc.).
+const DIGEST_TARGET_BYTES = Math.floor(DIGEST_MAX_BYTES * 0.85);
 
 const MARK = {
   journal: "===JOURNAL===",
@@ -53,7 +57,7 @@ ${currentDigest || "(vacío — es el primer escaneo)"}
 ${MARK.journal}
 (viñetas de los hallazgos NUEVOS de hoy, una por línea: "- <titular> — <por qué importa para la cartera> [fuente: URL]". Si no hay nada nuevo relevante, escribe "- (sin novedades relevantes)".)
 ${MARK.digest}
-(El digest COMPLETO actualizado. Integra lo nuevo relevante, refresca lo que sigue vivo y ELIMINA lo resuelto o caducado. Máximo ~800 palabras. Estructura EXACTA:
+(El digest COMPLETO actualizado. Integra lo nuevo relevante, refresca lo que sigue vivo y ELIMINA lo resuelto o caducado. Tamaño máximo: ${DIGEST_TARGET_BYTES} bytes UTF-8 (~600 palabras) — el sistema RECHAZA cualquier digest que supere ${DIGEST_MAX_BYTES} bytes. Si vas justo de espacio, poda primero los ítems [transitorio] más antiguos. Estructura EXACTA:
 _Actualizado: <fecha-hora ISO>_
 
 ## Riesgos activos
@@ -68,6 +72,17 @@ ${MARK.brief}
 (Resumen matinal en TEXTO PLANO de máximo 5 puntos: lo más importante de hoy para la cartera, breve y directo, listo para enviarse por Telegram. Empieza con un saludo corto tipo "Buenos días.". Trata al usuario de tú; no uses apodos ni títulos.)
 
 Reglas: no inventes; calidad sobre cantidad; si no hay novedades, refresca solo la fecha del digest y conserva lo vigente.`;
+}
+
+export function buildCondenseSystem(bytes: number): string {
+  return `Un digest de mercado ha superado su presupuesto: ocupa ${bytes} bytes y el máximo aceptado es ${DIGEST_MAX_BYTES} bytes UTF-8. Reescríbelo por debajo de ${DIGEST_TARGET_BYTES} bytes SIN añadir información nueva: conserva la línea "_Actualizado:_" y las cuatro secciones "##", fusiona redundancias, acorta la redacción y poda primero los ítems [transitorio] más antiguos. Responde ÚNICAMENTE con el digest condensado, sin delimitadores ni texto fuera de él.`;
+}
+
+/** Quita un posible cerco \`\`\`…\`\`\` alrededor de la salida del pase de condensación. */
+function stripFences(text: string): string {
+  const t = text.trim();
+  const m = t.match(/^```[a-z]*\n([\s\S]*?)\n```$/);
+  return (m ? m[1] : t).trim();
 }
 
 export type ScanResult = {
@@ -109,10 +124,33 @@ export async function runScan(opts: {
   if (!parsed) throw new Error("El scan no devolvió el formato esperado tras reintentar.");
 
   appendJournal(parsed.journal || "- (sin novedades relevantes)", opts.now);
-  writeDigest(parsed.digest); // validates (budget/sections/anti-wipe) + backups; throws on bad output
 
   const { text: _t, ...usage } = res;
   void _t;
+
+  // Autocompactación: si el digest revienta el presupuesto de bytes, un segundo
+  // pase sin tools lo condensa en vez de tirar el scan entero (el journal ya
+  // está a salvo). Si el pase falla, writeDigest rechaza como hasta ahora.
+  let digest = parsed.digest;
+  const digestBytes = Buffer.byteLength(digest, "utf8");
+  if (digestBytes > DIGEST_MAX_BYTES) {
+    const condensed = await runAdvisorOnce({
+      model: opts.model,
+      systemPrompt: buildCondenseSystem(digestBytes),
+      prompt: digest,
+      allowedTools: [],
+      maxTurns: 1,
+      timeoutMs: 120_000,
+    });
+    const clean = stripFences(condensed.text);
+    if (clean) digest = clean;
+    usage.costUsd += condensed.costUsd;
+    usage.inputTokens += condensed.inputTokens;
+    usage.outputTokens += condensed.outputTokens;
+    usage.webSearches += condensed.webSearches;
+  }
+
+  writeDigest(digest); // validates (budget/sections/anti-wipe) + backups; throws on bad output
   const hadFindings = !/sin novedades/i.test(parsed.journal);
   return { summary: parsed.summary || "scan", usage, hadFindings, brief: parsed.brief };
 }

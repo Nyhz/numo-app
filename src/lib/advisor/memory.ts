@@ -69,7 +69,8 @@ export function appendChangelog(line: string, when: Date): void {
 
 // ── Market memory (journal + digest) ─────────────────────────────────────────
 
-const DIGEST_MAX = Number(process.env.ADVISOR_DIGEST_MAX_BYTES ?? 8192);
+export const DIGEST_MAX_BYTES = Number(process.env.ADVISOR_DIGEST_MAX_BYTES ?? 8192);
+const DIGEST_MAX = DIGEST_MAX_BYTES;
 const DIGEST_SECTIONS = ["## Riesgos activos", "## Oportunidades", "## Macro", "## Watchlist"];
 
 export function readDigest(): string {
