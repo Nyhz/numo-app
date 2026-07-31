@@ -22,19 +22,20 @@ const KIND_LABELS: Record<AlertKind, string> = {
   price_above: "Sube a",
 };
 
-// Up/down/flat indicator vs the previous quote, with the absolute price delta.
-// Green ▲ up, red ▼ down, yellow — flat. Hidden until there's a previous tick.
-function TickIndicator({
+// Absolute price delta vs the last daily close — same baseline as the
+// "% vs cierre" line below, so both always agree in sign and colour.
+// Green ▲ up, red ▼ down, yellow — flat. Hidden until there's a close.
+function CloseDeltaIndicator({
   price,
-  prevPrice,
+  lastClose,
   currency,
 }: {
   price: number;
-  prevPrice: number | null;
+  lastClose: number | null;
   currency: string;
 }) {
-  if (prevPrice == null) return null;
-  const delta = price - prevPrice;
+  if (lastClose == null) return null;
+  const delta = price - lastClose;
   const up = delta > 0;
   const down = delta < 0;
   const Icon = up ? ArrowUp : down ? ArrowDown : Minus;
@@ -43,7 +44,7 @@ function TickIndicator({
   return (
     <span
       className={cn("flex items-center gap-0.5 text-xs font-medium tabular-nums", color)}
-      title="Variación vs la cotización anterior"
+      title="Variación vs el último cierre diario"
     >
       <Icon className="h-3.5 w-3.5" aria-hidden />
       <SensitiveValue>
@@ -115,7 +116,7 @@ export function WatchlistCard({ item }: { item: WatchlistItem }) {
                 <SensitiveValue as="span" className="text-lg font-semibold tabular-nums">
                   {fmt(price, currency)}
                 </SensitiveValue>
-                <TickIndicator price={price} prevPrice={quote?.prevPrice ?? null} currency={currency} />
+                <CloseDeltaIndicator price={price} lastClose={lastClose} currency={currency} />
               </div>
             ) : (
               <span className="text-sm text-muted-foreground">Sin cotización</span>
