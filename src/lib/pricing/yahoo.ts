@@ -124,22 +124,35 @@ export async function fetchHistory(
   from: Date,
   to: Date,
 ): Promise<HistoricalBar[]> {
-  const rows = (await withTimeout(
-    yahooFinance.historical(symbol, {
+  // NOTE: we call chart() and not historical(). Yahoo retired the endpoint
+  // historical() wrapped, so it is now a shim over chart() that THROWS when a
+  // bar has some-but-not-all null fields — and Xetra publishes exactly that
+  // (open/high/low/volume, close: null) for the running session, which killed
+  // the whole benchmark backfill with a single bad row. chart() hands us the
+  // raw bars so we drop the incomplete ones ourselves.
+  const res = (await withTimeout(
+    yahooFinance.chart(symbol, {
       period1: from,
       period2: to,
       interval: "1d",
     }),
     undefined,
-    `yahoo historical ${symbol}`,
-  )) as Array<{ date: Date; close: number | null }>;
-  // NOTE: Yahoo's historical endpoint does not return a per-row currency.
-  // The "USD" below is a placeholder — no live code path consumes this field
-  // (crypto backfills use the CoinGecko client, which is EUR-native). Anyone
-  // wiring this into a calculation must fetch the real currency via quote().
-  const currency = "USD";
-  return rows
-    .filter((r): r is { date: Date; close: number } => r.close != null)
+    `yahoo chart ${symbol}`,
+  )) as {
+    meta?: { currency?: string };
+    quotes?: Array<{ date: Date; close: number | null }>;
+  };
+  // chart() reports the series currency in meta (historical() never did). It
+  // is informational here — every consumer prices with the asset's own
+  // currency — so an unusable value degrades to "" instead of throwing and
+  // taking a whole backfill with it.
+  const raw = res.meta?.currency;
+  const currency = raw && /^[A-Za-z]{3}$/.test(raw) ? raw.toUpperCase() : "";
+  return (res.quotes ?? [])
+    .filter(
+      (r): r is { date: Date; close: number } =>
+        r.close != null && Number.isFinite(r.close),
+    )
     .map((r) => ({
       date: toIsoDate(r.date),
       close: r.close,
