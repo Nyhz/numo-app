@@ -20,6 +20,7 @@ pnpm db:migrate       # apply migrations
 pnpm db:seed          # optional seed data for dev
 pnpm db:backup        # timestamped copy of the SQLite file
 pnpm sync:prices      # local trigger of the price-sync cron route (Yahoo/CoinGecko/FT)
+pnpm catchup:prices   # check de frescura + gap-fill + sync tras caída del host (lo lanza finances-service.sh en cada arranque)
 pnpm advisor:scan|advisor:curate|advisor:chat-compact   # trigger AI crons locally
 pnpm backfill:asset-class   # infer + persist assets.assetClassTax (fiscal class)
 pnpm backfill:tax-lots      # rebuild FIFO tax lots from the ledger

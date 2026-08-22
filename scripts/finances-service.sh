@@ -85,6 +85,13 @@ else
   pnpm start --port "$PORT" &
 fi
 
+# Catch-up post-caída (SPEC §6): si el último cierre almacenado es anterior a
+# ayer (Madrid), el host se saltó al menos un cron de las 23:00 — gap-fill del
+# hueco y sync del día en cuanto el server responda. Freshness-gated: en un
+# restart normal (deploy/kickstart) es un no-op sin salir a red. En background
+# para no retrasar el arranque; nunca tumba el servicio.
+(pnpm exec tsx scripts/catchup-prices.ts >> "$HOME/.finances/logs/catchup.log" 2>&1 || true) &
+
 # Wait for the background process — this keeps the script alive so launchd
 # tracks this PID. The trap ensures children are killed on SIGTERM.
 wait

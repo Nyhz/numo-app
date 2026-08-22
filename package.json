@@ -14,6 +14,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:backup": "tsx scripts/backup-db.ts",
     "sync:prices": "curl -fsS -H \"x-cron-secret: $CRON_SECRET\" http://localhost:3200/api/cron/sync-prices",
+    "catchup:prices": "tsx scripts/catchup-prices.ts",
     "backup:drive": "curl -fsS --max-time 120 -H \"x-cron-secret: $CRON_SECRET\" http://localhost:3200/api/cron/backup",
     "advisor:scan": "curl -fsS --max-time 600 -H \"x-cron-secret: $CRON_SECRET\" http://localhost:3200/api/cron/advisor-scan",
     "advisor:curate": "curl -fsS --max-time 600 -H \"x-cron-secret: $CRON_SECRET\" http://localhost:3200/api/cron/advisor-curate",

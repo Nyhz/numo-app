@@ -20,3 +20,15 @@ export function isWeekday(iso: string): boolean {
   const d = new Date(`${iso}T12:00:00Z`).getUTCDay();
   return d !== 0 && d !== 6;
 }
+
+/** ISO yyyy-MM-dd of the given instant in Europe/Madrid. Freshness math for
+ *  the 23:00-Madrid cron must count days in Madrid, not UTC: a boot at 00:30
+ *  CEST is still "yesterday" in UTC and would mask a just-missed run. */
+export function madridDateIso(msUtc: number): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(msUtc));
+}

@@ -41,6 +41,10 @@ export async function runReactivationBackfill(
   assetId: string,
   db: DB = defaultDb,
   clients: GapClients = liveClients(),
+  // El catch-up de arranque (scripts/catchup-prices.ts) reutiliza este mismo
+  // orquestador con action «downtime_catchup» para que el audit trail no lo
+  // confunda con una reactivación real.
+  auditAction: string = "reactivation_backfill",
 ): Promise<ReactivationBackfillSummary> {
   const gap = await backfillAssetPriceGap(db, assetId, clients);
 
@@ -60,7 +64,7 @@ export async function runReactivationBackfill(
           id: ulid(),
           entityType: "asset",
           entityId: assetId,
-          action: "reactivation_backfill",
+          action: auditAction,
           actorType: "system",
           source: "system",
           summary: `gap-fill ${gap.fromIso} → ${gap.toIso}: ${gap.priceRowsInserted} precios, ${gap.fxRowsInserted} FX`,
